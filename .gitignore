@@ -1,0 +1,293 @@
+# ========================
+# BACKEND (Java/Spring Boot)
+# ========================
+
+# Compiled class files
+backend/target/
+backend/*.class
+backend/*.jar
+backend/*.war
+backend/*.ear
+
+# Maven
+backend/.mvn/
+backend/mvnw
+backend/mvnw.cmd
+
+# Eclipse
+backend/.classpath
+backend/.project
+backend/.settings/
+backend/bin/
+
+# IntelliJ IDEA
+backend/.idea/
+backend/*.iml
+backend/*.iws
+backend/*.ipr
+backend/out/
+
+# VS Code
+backend/.vscode/
+
+# Spring Boot
+backend/HELP.md
+backend/.springBeans
+
+# Logs
+backend/logs/
+backend/*.log
+backend/*.log.*
+
+# Test coverage
+backend/.jacoco/
+
+# Package Files
+backend/*.nar
+backend/*.tar.gz
+backend/*.zip
+
+# ========================
+# FRONTEND (Node/Vite/React)
+# ========================
+
+# Dependencies
+frontend/node_modules/
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/pnpm-debug.log*
+frontend/lerna-debug.log*
+
+# Build output
+frontend/dist/
+frontend/dist-ssr/
+frontend/build/
+frontend/.next/
+frontend/out/
+
+# Environment variables
+frontend/.env
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
+
+# Editor directories and files
+frontend/.vscode/*
+!frontend/.vscode/extensions.json
+frontend/.idea/
+frontend/.DS_Store
+frontend/*.suo
+frontend/*.ntvs*
+frontend/*.njsproj
+frontend/*.sln
+frontend/*.sw?
+
+# Testing
+frontend/coverage/
+frontend/.nyc_output/
+
+# TypeScript
+frontend/*.tsbuildinfo
+
+# Vite
+frontend/.vite/
+
+# ========================
+# TERRAFORM
+# ========================
+
+# Local .terraform directories
+terraform/**/.terraform/
+terraform/**/.terraform.lock.hcl
+
+# State files
+terraform/**/*.tfstate
+terraform/**/*.tfstate.*
+terraform/**/*.tfstate.backup
+
+# Plan files
+terraform/**/*.tfplan
+
+# Override files
+terraform/**/override.tf
+terraform/**/override.tf.json
+terraform/**/*_override.tf
+terraform/**/*_override.tf.json
+
+# Variable files with secrets
+terraform/**/*.auto.tfvars
+terraform/**/terraform.tfvars
+terraform/**/.terraformrc
+terraform/**/terraform.rc
+
+# Crash log files
+terraform/**/crash.log
+terraform/**/crash.*.log
+
+# ========================
+# ANSIBLE
+# ========================
+
+# Ansible retry files
+ansible/**/*.retry
+
+# Vault password files
+ansible/**/.vault_pass
+ansible/**/.vault_password
+
+# Temporary files
+ansible/**/*.tmp
+
+# Logs
+ansible/**/*.log
+
+# ========================
+# KUBERNETES
+# ========================
+
+# Helm
+k8s/**/charts/
+k8s/**/*.lock
+
+# Secrets (never commit!)
+k8s/**/secrets.yaml
+k8s/**/*-secret.yaml
+
+# ========================
+# DOCKER
+# ========================
+
+# Docker Compose override files
+docker-compose.override.yml
+docker-compose.*.yml
+!docker-compose.dev.yml
+!docker-compose.prod.yml
+
+# ========================
+# GENERAL
+# ========================
+
+# Operating System Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# IDE and Editor Files
+*.swp
+*.swo
+*~
+.idea/
+*.sublime-project
+*.sublime-workspace
+.vscode/
+.history/
+.vs/
+
+# Temporary Files
+*.tmp
+*.temp
+*.bak
+*.cache
+
+# Environment and Secret Files
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.p12
+*.jks
+secrets/
+credentials/
+
+# Backup Files
+*.backup
+*.old
+*.orig
+
+# Database Files
+*.sqlite
+*.sqlite3
+*.db
+
+# Archives
+*.7z
+*.dmg
+*.gz
+*.iso
+*.jar
+*.rar
+*.tar
+*.zip
+
+# CI/CD
+.github/secrets/
+
+# Application Logs
+*.log
+logs/
+log/
+
+# Documentation Build
+docs/_build/
+docs/.doctrees/
+
+# Python (if using Python scripts for automation)
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv/
+
+# Node (root level if any)
+node_modules/
+package-lock.json
+yarn.lock
+
+# SSH Keys
+*.pem
+id_rsa*
+*.ppk
+
+# AWS
+.aws/
+
+# Monitoring and Observability
+prometheus/data/
+grafana/data/
+loki/data/
+
+# Certificates
+*.crt
+*.key
+*.pem
+*.ca
+*.cer
+*.der
+*.p7b
+*.p7c
+*.p12
+*.pfx
+
+# Miscellaneous
+.history
+.ionide
+scratch/
+temp/
+tmp/
