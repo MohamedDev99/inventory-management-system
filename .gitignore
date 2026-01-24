@@ -47,6 +47,11 @@ backend/*.nar
 backend/*.tar.gz
 backend/*.zip
 
+# Environment variables
+backend/.env
+backend/.env.local
+backend/.env.*.local
+
 # ========================
 # FRONTEND (Node/Vite/React)
 # ========================
