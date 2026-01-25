@@ -1,13 +1,11 @@
 # 🏢 Inventory Management System
 
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen)]()
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Java](https://img.shields.io/badge/Java-17-orange.svg)]()
-[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.x-green.svg)]()
-[![React](https://img.shields.io/badge/React-18.x-blue.svg)]()
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-blue.svg)]()
+[![Build Status](https://img.shields.io/badge/build-passing-brightgreen)]() [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Java](https://img.shields.io/badge/Java-17-orange.svg)]() [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.x-green.svg)]()
+[![React](https://img.shields.io/badge/React-18.x-blue.svg)]() [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-blue.svg)]()
 
-A complete, production-ready inventory management system for small businesses with multi-warehouse support, supplier management, purchase orders, sales tracking, low stock alerts, and comprehensive reporting.
+A complete, production-ready inventory management system for small businesses with multi-warehouse support, supplier management, purchase orders,
+sales tracking, low stock alerts, and comprehensive reporting.
 
 ## 📋 Table of Contents
 
@@ -26,6 +24,7 @@ A complete, production-ready inventory management system for small businesses wi
 ## ✨ Features
 
 ### Core Functionality
+
 - **Multi-Warehouse Management** - Manage inventory across multiple warehouse locations
 - **Product Catalog** - Comprehensive product management with categories and SKUs
 - **Purchase Orders** - Create, approve, and track purchase orders with suppliers
@@ -35,6 +34,7 @@ A complete, production-ready inventory management system for small businesses wi
 - **Low Stock Alerts** - Automated notifications for products below reorder levels
 
 ### Advanced Features
+
 - **Barcode Integration** - Ready for barcode scanner integration
 - **Comprehensive Reporting** - Stock valuation, movement history, sales analysis
 - **User Management** - Role-based access control (Admin, Manager, Staff, Viewer)
@@ -46,7 +46,8 @@ A complete, production-ready inventory management system for small businesses wi
 ## 🛠 Tech Stack
 
 ### Backend
-- **Framework:** Spring Boot 3.x
+
+- **Framework:** Spring Boot 4.x
 - **Language:** Java 17
 - **Database:** PostgreSQL 15
 - **ORM:** Spring Data JPA / Hibernate
@@ -56,6 +57,7 @@ A complete, production-ready inventory management system for small businesses wi
 - **Testing:** JUnit 5, Mockito, Spring Boot Test
 
 ### Frontend
+
 - **Framework:** React 18.x
 - **Build Tool:** Vite
 - **Language:** TypeScript
@@ -67,6 +69,7 @@ A complete, production-ready inventory management system for small businesses wi
 - **Forms:** React Hook Form + Zod
 
 ### DevOps & Infrastructure
+
 - **Containerization:** Docker, Docker Compose
 - **CI/CD:** GitHub Actions
 - **Cloud:** AWS (EC2, RDS, S3, ALB)
@@ -190,6 +193,7 @@ npm run dev
 - **Health Check:** http://localhost:8080/actuator/health
 
 ### Default Credentials
+
 - **Username:** admin
 - **Password:** admin123 (Change immediately in production!)
 
@@ -284,6 +288,7 @@ docker-compose down -v
 ```
 
 Services will be available at:
+
 - Frontend: http://localhost:80
 - Backend: http://localhost:8080
 - PostgreSQL: localhost:5432
@@ -292,6 +297,7 @@ Services will be available at:
 ### Running Tests
 
 **Backend:**
+
 ```bash
 cd backend
 mvn test                    # Unit tests
@@ -300,6 +306,7 @@ mvn test jacoco:report      # Coverage report
 ```
 
 **Frontend:**
+
 ```bash
 cd frontend
 npm run test               # Unit tests
@@ -351,6 +358,7 @@ docker push MohamedDev99/inventory-backend:v1.0.0
 ### Cloud Deployment (AWS)
 
 See [DEPLOYMENT.md](docs/DEPLOYMENT.md) for detailed deployment instructions including:
+
 - AWS infrastructure setup
 - Terraform provisioning
 - Kubernetes deployment
@@ -359,6 +367,7 @@ See [DEPLOYMENT.md](docs/DEPLOYMENT.md) for detailed deployment instructions inc
 ### Environment Variables
 
 **Backend:**
+
 ```properties
 SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/inventory_db
 SPRING_DATASOURCE_USERNAME=inventory_user
@@ -370,6 +379,7 @@ AWS_S3_BUCKET=your-bucket-name
 ```
 
 **Frontend:**
+
 ```properties
 VITE_API_URL=http://localhost:8080/api
 VITE_APP_NAME=Inventory Management System
@@ -386,7 +396,8 @@ VITE_APP_NAME=Inventory Management System
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
+Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md) for details on our code of conduct and the process for submitting
+pull requests.
 
 ### Development Workflow
 
@@ -415,7 +426,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 👥 Authors
 
-- **EL MOUMNY MOHAMED** - *Initial work* - [MohamedDev99](https://github.com/MohamedDev99)
+- **EL MOUMNY MOHAMED** - _Initial work_ - [MohamedDev99](https://github.com/MohamedDev99)
 
 ## 🙏 Acknowledgments
 
@@ -426,9 +437,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 📞 Support
 
 If you have any questions or need help, please:
+
 - Open an [issue](https://github.com/MohamedDev99/inventory-management-system/issues)
 - Check the [documentation](docs/)
-- Contact: your.email@example.com
+- Contact: elmoumnymohamed1999[at] gmail [dot] com
 
 ## 🗺 Roadmap
 
