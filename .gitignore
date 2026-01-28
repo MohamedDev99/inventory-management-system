@@ -296,3 +296,11 @@ loki/data/
 scratch/
 temp/
 tmp/
+
+# Docs
+/docs/DevOps-Project-Roadmap-IMS.md
+/docs/IMS_design_guidelines.md
+
+# ========================
+# End of .gitignore
+# ========================

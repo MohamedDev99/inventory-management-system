@@ -1,4 +1,4 @@
-package com.moe_ims.inventory.exception;
+package com.moeware.ims.exception;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;

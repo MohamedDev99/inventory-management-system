@@ -1,4 +1,4 @@
-package com.moe_ims.inventory;
+package com.moeware.ims;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
