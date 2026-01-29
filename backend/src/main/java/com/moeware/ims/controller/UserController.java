@@ -1,9 +1,10 @@
 package com.moeware.ims.controller;
 
-import com.moeware.ims.dto.ApiResponse;
+import com.moeware.ims.dto.ApiResponseWpp;
 import com.moeware.ims.dto.auth.ChangePasswordDto;
 import com.moeware.ims.dto.user.UserResponseDto;
 import com.moeware.ims.dto.user.UserUpdateDto;
+import com.moeware.ims.exception.GlobalExceptionHandler;
 import com.moeware.ims.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +18,16 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.Parameters;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
+
 /**
  * REST controller for user management operations
  *
@@ -28,6 +39,8 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 @Slf4j
 @CrossOrigin(origins = "*", maxAge = 3600)
+@Tag(name = "User Management", description = "User management APIs for CRUD operations, password changes, and user statistics")
+@SecurityRequirement(name = "bearerAuth")
 public class UserController {
 
         private final UserService userService;
@@ -37,9 +50,20 @@ public class UserController {
          * GET /api/users
          * Requires ADMIN or MANAGER role
          */
+        @Operation(summary = "Get all active users", description = "Retrieve a paginated list of all active users. Requires ADMIN or MANAGER role.")
+        @ApiResponses(value = {
+                        @ApiResponse(responseCode = "200", description = "Users retrieved successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = Page.class))),
+                        @ApiResponse(responseCode = "403", description = "Forbidden - Insufficient permissions", content = @Content(mediaType = "application/json", schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class)))
+        })
+        @Parameters({
+                        @Parameter(name = "page", description = "Page number (0-indexed)", example = "0"),
+                        @Parameter(name = "size", description = "Number of items per page", example = "10"),
+                        @Parameter(name = "sortBy", description = "Field to sort by", example = "createdAt"),
+                        @Parameter(name = "direction", description = "Sort direction (ASC or DESC)", example = "DESC")
+        })
         @GetMapping
         @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
-        public ResponseEntity<ApiResponse<Page<UserResponseDto>>> getAllUsers(
+        public ResponseEntity<ApiResponseWpp<Page<UserResponseDto>>> getAllUsers(
                         @RequestParam(defaultValue = "0") int page,
                         @RequestParam(defaultValue = "10") int size,
                         @RequestParam(defaultValue = "createdAt") String sortBy,
@@ -53,7 +77,7 @@ public class UserController {
                 Page<UserResponseDto> users = userService.getAllActiveUsers(pageable);
 
                 return ResponseEntity.ok(
-                                ApiResponse.success(users, "Users retrieved successfully"));
+                                ApiResponseWpp.success(users, "Users retrieved successfully"));
         }
 
         /**
@@ -61,9 +85,19 @@ public class UserController {
          * GET /api/users/search
          * Requires ADMIN or MANAGER role
          */
+        @Operation(summary = "Search users", description = "Search users by username or email with pagination. Requires ADMIN or MANAGER role.")
+        @ApiResponses(value = {
+                        @ApiResponse(responseCode = "200", description = "Search completed successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = Page.class))),
+                        @ApiResponse(responseCode = "403", description = "Forbidden - Insufficient permissions")
+        })
+        @Parameters({
+                        @Parameter(name = "query", description = "Search term for username or email", required = true, example = "john"),
+                        @Parameter(name = "page", description = "Page number (0-indexed)", example = "0"),
+                        @Parameter(name = "size", description = "Number of items per page", example = "10")
+        })
         @GetMapping("/search")
         @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
-        public ResponseEntity<ApiResponse<Page<UserResponseDto>>> searchUsers(
+        public ResponseEntity<ApiResponseWpp<Page<UserResponseDto>>> searchUsers(
                         @RequestParam String query,
                         @RequestParam(defaultValue = "0") int page,
                         @RequestParam(defaultValue = "10") int size) {
@@ -74,7 +108,7 @@ public class UserController {
                 Page<UserResponseDto> users = userService.searchUsers(query, pageable);
 
                 return ResponseEntity.ok(
-                                ApiResponse.success(users, "Search completed"));
+                                ApiResponseWpp.success(users, "Search completed"));
         }
 
         /**
@@ -82,15 +116,22 @@ public class UserController {
          * GET /api/users/{id}
          * Requires ADMIN or MANAGER role
          */
+        @Operation(summary = "Get user by ID", description = "Retrieve detailed information about a specific user by their ID. Requires ADMIN or MANAGER role.")
+        @ApiResponses(value = {
+                        @ApiResponse(responseCode = "200", description = "User retrieved successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = UserResponseDto.class))),
+                        @ApiResponse(responseCode = "404", description = "User not found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class))),
+                        @ApiResponse(responseCode = "403", description = "Forbidden - Insufficient permissions")
+        })
+        @Parameter(name = "id", description = "User ID", required = true, example = "1")
         @GetMapping("/{id}")
         @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
-        public ResponseEntity<ApiResponse<UserResponseDto>> getUserById(@PathVariable Long id) {
+        public ResponseEntity<ApiResponseWpp<UserResponseDto>> getUserById(@PathVariable Long id) {
                 log.info("Get user by id request - id: {}", id);
 
                 UserResponseDto user = userService.getUserById(id);
 
                 return ResponseEntity.ok(
-                                ApiResponse.success(user, "User retrieved successfully"));
+                                ApiResponseWpp.success(user, "User retrieved successfully"));
         }
 
         /**
@@ -98,9 +139,17 @@ public class UserController {
          * PUT /api/users/{id}
          * Requires ADMIN role
          */
+        @Operation(summary = "Update user information", description = "Update user's email or role. Requires ADMIN role.")
+        @ApiResponses(value = {
+                        @ApiResponse(responseCode = "200", description = "User updated successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = UserResponseDto.class))),
+                        @ApiResponse(responseCode = "404", description = "User not found"),
+                        @ApiResponse(responseCode = "409", description = "Email already exists"),
+                        @ApiResponse(responseCode = "403", description = "Forbidden - Requires ADMIN role")
+        })
+        @Parameter(name = "id", description = "User ID to update", required = true, example = "1")
         @PutMapping("/{id}")
         @PreAuthorize("hasRole('ADMIN')")
-        public ResponseEntity<ApiResponse<UserResponseDto>> updateUser(
+        public ResponseEntity<ApiResponseWpp<UserResponseDto>> updateUser(
                         @PathVariable Long id,
                         @Valid @RequestBody UserUpdateDto updateDto) {
 
@@ -109,7 +158,7 @@ public class UserController {
                 UserResponseDto user = userService.updateUser(id, updateDto);
 
                 return ResponseEntity.ok(
-                                ApiResponse.success(user, "User updated successfully"));
+                                ApiResponseWpp.success(user, "User updated successfully"));
         }
 
         /**
@@ -117,8 +166,16 @@ public class UserController {
          * POST /api/users/{id}/change-password
          * Users can change their own password, ADMIN can change any
          */
+        @Operation(summary = "Change user password", description = "Change password for a user. Users can change their own password, ADMIN can change any user's password.")
+        @ApiResponses(value = {
+                        @ApiResponse(responseCode = "200", description = "Password changed successfully"),
+                        @ApiResponse(responseCode = "400", description = "Passwords do not match or invalid input"),
+                        @ApiResponse(responseCode = "403", description = "Forbidden - Can only change own password unless ADMIN"),
+                        @ApiResponse(responseCode = "404", description = "User not found")
+        })
+        @Parameter(name = "id", description = "User ID", required = true, example = "1")
         @PostMapping("/{id}/change-password")
-        public ResponseEntity<ApiResponse<Void>> changePassword(
+        public ResponseEntity<ApiResponseWpp<Void>> changePassword(
                         @PathVariable Long id,
                         @Valid @RequestBody ChangePasswordDto changePasswordDto,
                         Authentication authentication) {
@@ -132,19 +189,19 @@ public class UserController {
 
                 if (!currentUser.getId().equals(id) && !isAdmin) {
                         return ResponseEntity.status(403).body(
-                                        ApiResponse.error("You can only change your own password"));
+                                        ApiResponseWpp.error("You can only change your own password"));
                 }
 
                 // Verify passwords match
                 if (!changePasswordDto.passwordsMatch()) {
                         return ResponseEntity.badRequest().body(
-                                        ApiResponse.error("Passwords do not match"));
+                                        ApiResponseWpp.error("Passwords do not match"));
                 }
 
                 userService.changePassword(id, changePasswordDto.getNewPassword());
 
                 return ResponseEntity.ok(
-                                ApiResponse.success(null, "Password changed successfully"));
+                                ApiResponseWpp.success(null, "Password changed successfully"));
         }
 
         /**
@@ -152,15 +209,22 @@ public class UserController {
          * DELETE /api/users/{id}
          * Requires ADMIN role
          */
+        @Operation(summary = "Deactivate user", description = "Soft delete a user by setting their account to inactive. Requires ADMIN role.")
+        @ApiResponses(value = {
+                        @ApiResponse(responseCode = "200", description = "User deactivated successfully"),
+                        @ApiResponse(responseCode = "404", description = "User not found"),
+                        @ApiResponse(responseCode = "403", description = "Forbidden - Requires ADMIN role")
+        })
+        @Parameter(name = "id", description = "User ID to deactivate", required = true, example = "1")
         @DeleteMapping("/{id}")
         @PreAuthorize("hasRole('ADMIN')")
-        public ResponseEntity<ApiResponse<Void>> deactivateUser(@PathVariable Long id) {
+        public ResponseEntity<ApiResponseWpp<Void>> deactivateUser(@PathVariable Long id) {
                 log.info("Deactivate user request - id: {}", id);
 
                 userService.deactivateUser(id);
 
                 return ResponseEntity.ok(
-                                ApiResponse.success(null, "User deactivated successfully"));
+                                ApiResponseWpp.success(null, "User deactivated successfully"));
         }
 
         /**
@@ -168,15 +232,22 @@ public class UserController {
          * POST /api/users/{id}/activate
          * Requires ADMIN role
          */
+        @Operation(summary = "Activate user", description = "Reactivate a previously deactivated user account. Requires ADMIN role.")
+        @ApiResponses(value = {
+                        @ApiResponse(responseCode = "200", description = "User activated successfully"),
+                        @ApiResponse(responseCode = "404", description = "User not found"),
+                        @ApiResponse(responseCode = "403", description = "Forbidden - Requires ADMIN role")
+        })
+        @Parameter(name = "id", description = "User ID to activate", required = true, example = "1")
         @PostMapping("/{id}/activate")
         @PreAuthorize("hasRole('ADMIN')")
-        public ResponseEntity<ApiResponse<Void>> activateUser(@PathVariable Long id) {
+        public ResponseEntity<ApiResponseWpp<Void>> activateUser(@PathVariable Long id) {
                 log.info("Activate user request - id: {}", id);
 
                 userService.activateUser(id);
 
                 return ResponseEntity.ok(
-                                ApiResponse.success(null, "User activated successfully"));
+                                ApiResponseWpp.success(null, "User activated successfully"));
         }
 
         /**
@@ -184,14 +255,19 @@ public class UserController {
          * GET /api/users/statistics
          * Requires ADMIN role
          */
+        @Operation(summary = "Get user statistics", description = "Retrieve statistics about users including total count, active users, and counts by role. Requires ADMIN role.")
+        @ApiResponses(value = {
+                        @ApiResponse(responseCode = "200", description = "Statistics retrieved successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = UserService.UserStatistics.class))),
+                        @ApiResponse(responseCode = "403", description = "Forbidden - Requires ADMIN role")
+        })
         @GetMapping("/statistics")
         @PreAuthorize("hasRole('ADMIN')")
-        public ResponseEntity<ApiResponse<UserService.UserStatistics>> getUserStatistics() {
+        public ResponseEntity<ApiResponseWpp<UserService.UserStatistics>> getUserStatistics() {
                 log.info("Get user statistics request");
 
                 UserService.UserStatistics statistics = userService.getStatistics();
 
                 return ResponseEntity.ok(
-                                ApiResponse.success(statistics, "Statistics retrieved successfully"));
+                                ApiResponseWpp.success(statistics, "Statistics retrieved successfully"));
         }
 }

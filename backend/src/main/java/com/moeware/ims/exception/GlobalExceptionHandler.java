@@ -14,6 +14,8 @@ import org.springframework.web.context.request.WebRequest;
 import com.moeware.ims.exception.auth.InvalidTokenException;
 import com.moeware.ims.exception.user.UserAlreadyExistsException;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
@@ -162,11 +164,21 @@ public class GlobalExceptionHandler {
     @lombok.Builder
     @lombok.NoArgsConstructor
     @lombok.AllArgsConstructor
+    @Schema(description = "Standard error response")
     public static class ErrorResponse {
+        @Schema(description = "Error timestamp", example = "2026-01-28T10:30:00")
         private LocalDateTime timestamp;
+
+        @Schema(description = "HTTP status code", example = "404")
         private int status;
+
+        @Schema(description = "Error type", example = "Not Found")
         private String error;
+
+        @Schema(description = "Error message", example = "User not found with id: 123")
         private String message;
+
+        @Schema(description = "Request path", example = "/api/users/123")
         private String path;
     }
 
@@ -177,12 +189,24 @@ public class GlobalExceptionHandler {
     @lombok.Builder
     @lombok.NoArgsConstructor
     @lombok.AllArgsConstructor
+    @Schema(description = "Validation error response with field-specific errors")
     public static class ValidationErrorResponse {
+        @Schema(description = "Error timestamp", example = "2026-01-28T10:30:00")
         private LocalDateTime timestamp;
+
+        @Schema(description = "HTTP status code", example = "400")
         private int status;
+
+        @Schema(description = "Error type", example = "Validation Failed")
         private String error;
+
+        @Schema(description = "Error message", example = "Invalid input data")
         private String message;
+
+        @Schema(description = "Request path", example = "/api/auth/register")
         private String path;
+
+        @Schema(description = "Field-specific validation errors", example = "{\"username\": \"Username must be between 3 and 50 characters\", \"email\": \"Email must be valid\"}")
         private Map<String, String> fieldErrors;
     }
 }

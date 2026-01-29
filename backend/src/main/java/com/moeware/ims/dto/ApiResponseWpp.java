@@ -7,6 +7,8 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 /**
  * Generic API response wrapper
  *
@@ -16,15 +18,23 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class ApiResponse<T> {
+@Schema(description = "Generic API response wrapper")
+public class ApiResponseWpp<T> {
 
+    @Schema(description = "Operation success status", example = "true")
     private boolean success;
+
+    @Schema(description = "Response message", example = "Operation successful")
     private String message;
+
+    @Schema(description = "Response data (type varies by endpoint)")
     private T data;
+
+    @Schema(description = "Response timestamp", example = "2026-01-28T10:30:00")
     private LocalDateTime timestamp;
 
-    public static <T> ApiResponse<T> success(T data, String message) {
-        return ApiResponse.<T>builder()
+    public static <T> ApiResponseWpp<T> success(T data, String message) {
+        return ApiResponseWpp.<T>builder()
                 .success(true)
                 .message(message)
                 .data(data)
@@ -32,15 +42,16 @@ public class ApiResponse<T> {
                 .build();
     }
 
-    public static <T> ApiResponse<T> success(T data) {
+    public static <T> ApiResponseWpp<T> success(T data) {
         return success(data, "Operation successful");
     }
 
-    public static <T> ApiResponse<T> error(String message) {
-        return ApiResponse.<T>builder()
+    public static <T> ApiResponseWpp<T> error(String message) {
+        return ApiResponseWpp.<T>builder()
                 .success(false)
                 .message(message)
                 .timestamp(LocalDateTime.now())
                 .build();
     }
+
 }
