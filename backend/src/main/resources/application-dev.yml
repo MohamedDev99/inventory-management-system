@@ -16,3 +16,8 @@ spring:
 
 server:
   port: 8080
+
+jwt:
+  secret: ${JWT_SECRET}
+  expiration: ${JWT_EXPIRATION_MS}
+  refresh-expiration: ${JWT_REFRESH_EXPIRATION_MS}
