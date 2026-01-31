@@ -15,9 +15,6 @@ CREATE TABLE roles (
 -- Create index on role name
 CREATE INDEX idx_roles_name ON roles (name);
 
--- Select all roles
-SELECT * FROM roles;
-
 -- Insert default roles
 INSERT INTO
     roles (

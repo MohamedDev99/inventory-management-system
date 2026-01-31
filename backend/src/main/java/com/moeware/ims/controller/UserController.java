@@ -38,7 +38,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 @RequestMapping("/api/users")
 @RequiredArgsConstructor
 @Slf4j
-@CrossOrigin(origins = "*", maxAge = 3600)
+@CrossOrigin(origins = "${app.cors.allowed-origins}")
 @Tag(name = "User Management", description = "User management APIs for CRUD operations, password changes, and user statistics")
 @SecurityRequirement(name = "bearerAuth")
 public class UserController {
@@ -71,7 +71,7 @@ public class UserController {
 
                 log.info("Get all users request - page: {}, size: {}", page, size);
 
-                Sort.Direction sortDirection = Sort.Direction.fromString(direction);
+                Sort.Direction sortDirection = parseSortDirection(direction);
                 Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, sortBy));
 
                 Page<UserResponseDto> users = userService.getAllActiveUsers(pageable);
@@ -198,6 +198,13 @@ public class UserController {
                                         ApiResponseWpp.error("Passwords do not match"));
                 }
 
+                // Verify current password is correct
+                User user = userService.getUserById(id);
+                if (!passwordEncoder.matches(changePasswordDto.getCurrentPassword(), user.getPasswordHash())) {
+                        return ResponseEntity.badRequest().body(
+                                        ApiResponseWpp.error("Current password is incorrect"));
+                }
+
                 userService.changePassword(id, changePasswordDto.getNewPassword());
 
                 return ResponseEntity.ok(
@@ -269,5 +276,16 @@ public class UserController {
 
                 return ResponseEntity.ok(
                                 ApiResponseWpp.success(statistics, "Statistics retrieved successfully"));
+        }
+
+
+
+
+        private Sort.Direction parseSortDirection(String direction) {
+                try {
+                        return Sort.Direction.fromString(direction);
+                } catch (IllegalArgumentException e) {
+                        return Sort.Direction.DESC; // Default fallback
+                }
         }
 }

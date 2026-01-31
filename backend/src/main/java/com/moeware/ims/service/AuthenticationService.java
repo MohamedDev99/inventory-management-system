@@ -13,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -138,9 +139,14 @@ public class AuthenticationService {
                     .user(user)
                     .build();
 
-        } catch (Exception e) {
+        } catch (InvalidTokenException e) {
+            throw e;
+        } catch (io.jsonwebtoken.JwtException e) {
             log.error("Token refresh failed: {}", e.getMessage());
             throw new InvalidTokenException("Failed to refresh token: " + e.getMessage());
+        } catch (Exception e) {
+            log.error("Unexpected error during token refresh: {}", e.getMessage());
+            throw e;
         }
     }
 
@@ -169,7 +175,7 @@ public class AuthenticationService {
     public UserResponseDto getCurrentUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
-        if (authentication == null || !authentication.isAuthenticated()) {
+        if (authentication == null || !authentication.isAuthenticated() || authentication instanceof AnonymousAuthenticationToken) {
             throw new InvalidCredentialsException("No authenticated user found");
         }
 

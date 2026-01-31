@@ -41,7 +41,7 @@ import lombok.extern.slf4j.Slf4j;
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
 @Slf4j
-@CrossOrigin(origins = "*", maxAge = 3600)
+@CrossOrigin(origins = "${app.cors.allowed-origins}")
 @Tag(name = "Authentication", description = "Authentication management APIs for user registration, login, and token operations")
 public class AuthController {
 

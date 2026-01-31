@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 
 /**
  * DTO for refresh token request
@@ -19,5 +20,6 @@ public class RefreshTokenRequest {
 
     @Schema(description = "Valid refresh token obtained during login", example = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJqb2huZG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.dummyRefreshToken", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotBlank(message = "Refresh token is required")
+    @ToString.Exclude
     private String refreshToken;
 }

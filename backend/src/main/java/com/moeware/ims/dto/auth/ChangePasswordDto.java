@@ -3,6 +3,7 @@ package com.moeware.ims.dto.auth;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.AssertTrue;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -34,6 +35,7 @@ public class ChangePasswordDto {
     /**
      * Check if new password and confirmation match
      */
+    @AssertTrue(message = "New password and confirmation do not match")
     public boolean passwordsMatch() {
         return newPassword != null && newPassword.equals(confirmPassword);
     }

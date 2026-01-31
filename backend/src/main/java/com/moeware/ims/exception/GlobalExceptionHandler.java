@@ -82,9 +82,13 @@ public class GlobalExceptionHandler {
 
         Map<String, String> errors = new HashMap<>();
         ex.getBindingResult().getAllErrors().forEach((error) -> {
-            String fieldName = ((FieldError) error).getField();
             String errorMessage = error.getDefaultMessage();
-            errors.put(fieldName, errorMessage);
+            if(error instanceof FieldError) {
+                FieldError fieldError = (FieldError) error;
+                errors.put(fieldError.getField(), errorMessage);
+            } else {
+                errors.put(error.getObjectName(), errorMessage);
+            }
         });
 
         return ValidationErrorResponse.builder()

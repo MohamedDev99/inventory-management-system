@@ -8,7 +8,7 @@ spring:
   jpa:
     show-sql: true
     hibernate:
-      ddl-auto: update  # Let Flyway handle schema
+      ddl-auto: validate  # Let Flyway handle schema
     properties:
       hibernate:
         format_sql: true
