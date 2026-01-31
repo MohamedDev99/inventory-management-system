@@ -15,28 +15,40 @@ CREATE TABLE roles (
 -- Create index on role name
 CREATE INDEX idx_roles_name ON roles (name);
 
+-- Select all roles
+SELECT * FROM roles;
+
 -- Insert default roles
 INSERT INTO
-    roles (id, name, description)
+    roles (
+        id,
+        name,
+        description,
+        created_at
+    )
 VALUES (
         1,
         'ADMIN',
-        'Full system access'
+        'Full system access',
+        CURRENT_TIMESTAMP
     ),
     (
         2,
         'MANAGER',
-        'Warehouse and order management'
+        'Warehouse and order management',
+        CURRENT_TIMESTAMP
     ),
     (
         3,
         'WAREHOUSE_STAFF',
-        'Inventory operations only'
+        'Inventory operations only',
+        CURRENT_TIMESTAMP
     ),
     (
         4,
         'VIEWER',
-        'Read-only access'
+        'Read-only access',
+        CURRENT_TIMESTAMP
     );
 
 -- Reset sequence to start after seeded data
