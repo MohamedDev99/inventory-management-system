@@ -1,6 +1,6 @@
 spring:
   datasource:
-    url: jdbc:postgresql://${DATABASE_HOST}:${DATABASE_PORT:5432}/${DATABASE_NAME}?sslmode=require
+    url: jdbc:postgresql://${DATABASE_HOST}/${DATABASE_NAME}?sslmode=require
     username: ${DATABASE_USERNAME}
     password: ${DATABASE_PASSWORD}
     driver-class-name: org.postgresql.Driver
@@ -9,10 +9,29 @@ spring:
       connection-timeout: 30000
       minimum-idle: 2
 
-  flyway:
-    enabled: true
-    baseline-on-migrate: true
-    locations: classpath:db/migration
-
 server:
   port: 8080
+
+app:
+  cors:
+    allowed-origins: *
+
+
+# OpenAPI / Swagger Configuration
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+    enabled: true
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+    tags-sorter: alpha
+    operations-sorter: alpha
+    display-request-duration: true
+    doc-expansion: none
+    default-models-expand-depth: 1
+    default-model-expand-depth: 1
+    try-it-out-enabled: true
+  show-actuator: false
+  packages-to-scan: com.moeware.ims.controller
+  paths-to-match: /api/**

@@ -1,4 +1,4 @@
-package com.moe_ims.inventory;
+package com.moeware.ims;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
