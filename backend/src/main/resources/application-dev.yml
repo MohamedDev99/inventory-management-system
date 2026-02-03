@@ -14,7 +14,7 @@ server:
 
 app:
   cors:
-    allowed-origins: *
+    allowed-origins: "*"
 
 
 # OpenAPI / Swagger Configuration

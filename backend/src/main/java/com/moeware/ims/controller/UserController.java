@@ -4,11 +4,14 @@ import com.moeware.ims.dto.ApiResponseWpp;
 import com.moeware.ims.dto.auth.ChangePasswordDto;
 import com.moeware.ims.dto.user.UserResponseDto;
 import com.moeware.ims.dto.user.UserUpdateDto;
+import com.moeware.ims.entity.User;
 import com.moeware.ims.exception.GlobalExceptionHandler;
 import com.moeware.ims.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -16,6 +19,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -42,6 +46,9 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 @Tag(name = "User Management", description = "User management APIs for CRUD operations, password changes, and user statistics")
 @SecurityRequirement(name = "bearerAuth")
 public class UserController {
+
+        @Autowired
+        private final PasswordEncoder passwordEncoder;
 
         private final UserService userService;
 
@@ -199,8 +206,8 @@ public class UserController {
                 }
 
                 // Verify current password is correct
-                User user = userService.getUserById(id);
-                if (!passwordEncoder.matches(changePasswordDto.getCurrentPassword(), user.getPasswordHash())) {
+                String userPasswordhash = userService.getUserPasswordHash(id);
+                if (!passwordEncoder.matches(changePasswordDto.getCurrentPassword(), userPasswordhash)) {
                         return ResponseEntity.badRequest().body(
                                         ApiResponseWpp.error("Current password is incorrect"));
                 }
@@ -277,9 +284,6 @@ public class UserController {
                 return ResponseEntity.ok(
                                 ApiResponseWpp.success(statistics, "Statistics retrieved successfully"));
         }
-
-
-
 
         private Sort.Direction parseSortDirection(String direction) {
                 try {

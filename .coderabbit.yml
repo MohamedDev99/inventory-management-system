@@ -1,0 +1,356 @@
+version: 2
+language: en
+
+# ─────────────────────────────────────────────
+# KNOWLEDGE BASE
+# ─────────────────────────────────────────────
+knowledge_base:
+  docs:
+    - url: https://docs.spring.io/spring-boot/docs/current/reference/htmlsingle/
+    - url: https://docs.spring.io/spring-data/jpa/docs/current/reference/html/
+    - url: https://flywaydb.org/documentation/
+    - url: https://docs.spring.io/spring-security/site/docs/current/reference/html/
+    - url: https://react.dev/
+    - url: https://tailwindcss.com/docs
+    - url: https://ui.shadcn.com/docs
+    - url: https://www.postgresql.org/docs/15/
+    - url: https://docs.docker.com/
+    - url: https://kubernetes.io/docs/
+    - url: https://developer.hashicorp.com/terraform/language
+    - url: https://docs.ansible.com/
+    - url: https://docs.github.com/en/actions
+
+# ─────────────────────────────────────────────
+# REVIEWS — top-level behaviour
+# ─────────────────────────────────────────────
+reviews:
+  # Paste-detection is noisy for boilerplate entity/DTO files; keep it off.
+  request_small_suggestions: true
+  auto_review:
+    enabled: true
+    drafts: false # skip WIP / draft PRs
+    ignore_labels:
+      - "wip"
+      - "draft"
+      - "docs-only"
+      - "chore"
+
+# ─────────────────────────────────────────────
+# CHAT — conversational assist
+# ─────────────────────────────────────────────
+chat:
+  enabled: true
+
+# ─────────────────────────────────────────────
+# TONE & STYLE
+# ─────────────────────────────────────────────
+tone_instructions: |
+  Be concise and direct.  Explain *why* a change is needed, not just *what* is
+  wrong.  When suggesting a fix, include a short code snippet.  Treat the author
+  as a capable developer learning DevOps best-practices; calibrate depth
+  accordingly — point out subtle issues (e.g. missing index, unclosed
+  transaction) without being condescending about straightforward ones.
+
+# ─────────────────────────────────────────────
+# GENERAL INSTRUCTIONS  (project-wide rules the
+# reviewer should always keep in mind)
+# ─────────────────────────────────────────────
+general_instructions: |
+  Project: MoeWare Inventory Management System
+  Stack : Spring Boot 4.x (Java 17) · React 18 + TypeScript · PostgreSQL 15
+          · Docker · Kubernetes · Terraform · Ansible · GitHub Actions
+
+  1. COMMIT & BRANCH CONVENTIONS
+     Commits MUST follow Conventional Commits with the prefixes used in this
+     project: feat, fix, ci, iac, config, chore, docs, test, refactor, perf.
+     Branch names must start with feature/, bugfix/, or release/.
+     Flag any commit message or branch name that violates this.
+
+  2. SECURITY — highest priority
+     • Never allow hard-coded credentials, API keys, or secrets in any file.
+       Vault / environment variables / GitHub Secrets only.
+     • JWT signing keys and refresh-token secrets must come from configuration,
+       never literals.
+     • Passwords in Spring entities must be hashed (BCrypt); flag any plain-text
+       password handling.
+     • SQL migration scripts must never contain real PII or production secrets.
+     • Docker images must run as non-root.  Flag any Dockerfile missing a USER
+       directive.
+     • Terraform resources (especially RDS, S3, EC2) must have encryption
+       enabled and public access disabled unless explicitly justified.
+     • Flag any Kubernetes Secret that is base64-encoded inline instead of
+       managed via Vault or an external secret operator.
+
+  3. DATABASE & MIGRATIONS (Flyway)
+     • Every migration file must follow the V{N}__{description}.sql naming
+       convention.  Undo scripts (U{N}__) are optional but encouraged.
+     • New tables need the standard created_at / updated_at TIMESTAMP columns.
+     • All foreign keys must specify ON DELETE behaviour explicitly.
+     • Indexes on every foreign-key column and every column that appears in a
+       WHERE clause of a sample/dashboard query.
+     • DECIMAL(12,2) for all monetary columns; never FLOAT or DOUBLE.
+     • Enum values must use VARCHAR + CHECK constraint, not PostgreSQL ENUMs.
+     • Warn if a migration attempts destructive changes (DROP TABLE/COLUMN)
+       without a corresponding undo script.
+
+  4. BACKEND — Spring Boot
+     • Entity classes must use Lombok where possible to reduce boilerplate.
+     • All controller endpoints must have @Valid on request bodies and proper
+       @ResponseStatus or handled via GlobalExceptionHandler.
+     • Repository layer must be the only place that interacts with the database;
+       no raw JDBC or native queries in service classes without strong
+       justification.
+     • Inventory mutations (stock transfer, adjustment, receipt) must be wrapped
+       in @Transactional and use optimistic locking (@Version) to prevent
+       race conditions.
+     • Order-number generation (PO-YYYYMMDD-XXXX / SO-YYYYMMDD-XXXX) must be
+       thread-safe.
+     • DTO ↔ Entity mapping must be consistent; flag if a controller returns an
+       entity directly instead of a DTO.
+     • Application profiles (dev, test, prod) must not share database URLs or
+       secret values.
+
+  5. FRONTEND — React + TypeScript
+     • All components must be typed; no implicit `any`.
+     • API calls must go through the /services layer; no raw fetch/axios calls
+       inside components or hooks.
+     • Forms must validate on the client before submission.
+     • Tailwind classes must use the Blue Sky design tokens defined in the
+       project's @theme block (primary-*, success-*, warning-*, error-*).
+       Flag hard-coded hex colours or non-project colours.
+     • Shadcn/UI components must be used for standard UI elements (Button,
+       Input, Table, Dialog, Badge, etc.) rather than custom re-implementations.
+
+  6. DOCKER & CONTAINERS
+     • All Dockerfiles must be multi-stage.  Flag single-stage builds.
+     • .dockerignore must exist alongside every Dockerfile.
+     • Health-check instructions (HEALTHCHECK) are required in backend images.
+     • docker-compose files must pin image tags; `latest` is not acceptable in
+       production or staging compose files.
+
+  7. CI / CD — GitHub Actions
+     • Workflows must cache dependencies (Maven, npm, Docker layers).
+     • Trivy image scanning must run before any image is pushed.
+     • Production deployments require a manual approval gate; flag any workflow
+       that deploys to prod on push without one.
+     • Secrets must be referenced via ${{ secrets.* }}; never echoed or logged.
+
+  8. INFRASTRUCTURE AS CODE — Terraform
+     • All resources must be tagged with at minimum: Environment, Project,
+       ManagedBy.
+     • Remote state must use S3 + DynamoDB locking; flag any local state usage.
+     • Modules must live under terraform/modules/; flat root configs are a smell.
+     • RDS must have multi_az = true and automated_backup_retention >= 7 in prod.
+
+  9. CONFIGURATION MANAGEMENT — Ansible
+     • Playbooks must be idempotent.  Flag tasks that are not guarded by
+       when / creates / changed_when.
+     • Sensitive values must come from Ansible Vault or an external vault
+       integration; never plain text in group_vars.
+     • Roles must have a meta/main.yml declaring dependencies.
+
+  10. KUBERNETES
+      • Every Deployment must declare resource requests AND limits for CPU and
+          memory.
+      • Liveness and readiness probes are mandatory.
+      • PodSecurityPolicy / Pod Security Standards must be set to restricted
+          where possible.
+      • Helm values files must exist per environment (values-dev.yaml, etc.).
+
+# ─────────────────────────────────────────────
+# FILE / PATH-SPECIFIC INSTRUCTIONS
+# ─────────────────────────────────────────────
+path_instructions:
+  # ── Backend ──────────────────────────────────
+  - path: "backend/src/main/java/**/entity/**"
+    instructions: |
+      Entity classes represent the 22-table schema.  Verify:
+        • @Entity and @Table annotations are present with explicit table names.
+        • All ID fields use @GeneratedValue(strategy = IDENTITY) with BIGINT.
+        • Lombok @Data / @Builder / @AllArgsConstructor are used consistently.
+        • @Version field exists on any entity that participates in concurrent
+          writes (InventoryItem, PurchaseOrder, SalesOrder, StockAdjustment).
+        • created_at / updated_at use @CreatedDate / @LastModifiedDate.
+        • Enum columns use @Enumerated(EnumType.STRING), never ORDINAL.
+        • No entity exposes a field whose name collides with a PostgreSQL
+          reserved word without a @Column(name = "…") override.
+
+  - path: "backend/src/main/resources/db/migration/**"
+    instructions: |
+      Flyway migration scripts.  Verify:
+        • File name matches V{N}__{description}.sql exactly.
+        • Tables are created in dependency order (no forward-reference FKs).
+        • Every FK has explicit ON DELETE and ON UPDATE clauses.
+        • Indexes are created for all FK columns and all columns used in the
+          sample queries documented in database-schema.md.
+        • No migration uses CREATE OR REPLACE on tables — use ALTER or a new
+          migration version.
+        • Monetary columns are DECIMAL(12,2).
+        • Enum columns use VARCHAR + CHECK, not native ENUMs.
+
+  - path: "backend/src/main/java/**/controller/**"
+    instructions: |
+      REST controllers.  Verify:
+        • Every endpoint is documented with @Operation (Springdoc/OpenAPI).
+        • Request bodies are annotated with @Valid.
+        • Responses return DTOs, never raw entities.
+        • HTTP status codes are semantically correct (201 for create, 204 for
+          delete, etc.).
+        • Role-based access is enforced via @PreAuthorize matching the RBAC
+          matrix: ADMIN (full), MANAGER (approve + manage), WAREHOUSE_STAFF
+          (ops), VIEWER (read-only).
+
+  - path: "backend/src/main/java/**/service/**"
+    instructions: |
+      Service layer (business logic).  Verify:
+        • Classes are annotated with @Service and @Transactional where needed.
+        • Inventory-mutating methods use optimistic locking and throw
+          appropriate exceptions on version mismatch.
+        • Order-number generation is atomic / thread-safe.
+        • No direct database access — all persistence goes through
+          @Repository interfaces.
+        • Audit-log entries are created for every CREATE / UPDATE / DELETE on
+          critical entities.
+
+  - path: "backend/src/main/java/**/repository/**"
+    instructions: |
+      Spring Data JPA repositories.  Verify:
+        • Extend JpaRepository or a suitable Spring Data interface.
+        • Custom queries use @Query with JPQL (prefer) or native SQL with a
+          clear justification comment.
+        • Pagination is supported on all list methods (return Page<T>).
+        • Method names follow Spring Data naming conventions so the query
+          derivation is predictable.
+
+  - path: "backend/src/test/**"
+    instructions: |
+      Tests.  Verify:
+        • Unit tests mock the repository layer; do not spin up a real DB.
+        • Integration tests use @SpringBootTest with a test profile and an
+          embedded or test-container PostgreSQL.
+        • Controller tests use @WebMvcTest.
+        • At least one test exists per public service method.
+        • Migration scripts are validated by a test that applies them against
+          an empty schema (smoke test).
+
+  # ── Frontend ─────────────────────────────────
+  - path: "frontend/src/**"
+    instructions: |
+      React + TypeScript frontend.  Verify:
+        • All exports are explicitly typed; no implicit `any`.
+        • Components that are presentational are kept free of side-effects.
+        • All API calls are routed through files in /services; components and
+          hooks must not call axios/fetch directly.
+        • Tailwind classes reference only the design tokens defined in the
+          project @theme block (primary-*, accent-*, success-*, warning-*,
+          error-*).  Hard-coded colours (e.g. #0ea5e9) are not allowed.
+        • Standard UI primitives (Button, Input, Table, Dialog, Badge, Select,
+          etc.) must use Shadcn/UI imports.
+        • Forms perform client-side validation before any network request.
+
+  - path: "frontend/src/services/**"
+    instructions: |
+      API client layer.  Verify:
+        • Base URL is read from an environment variable, never hard-coded.
+        • Axios interceptors handle token refresh and 401 responses centrally.
+        • Return types are mapped to the TypeScript interfaces in /types.
+        • Endpoints match the REST API contract (paths, HTTP methods, payloads).
+
+  - path: "frontend/src/types/**"
+    instructions: |
+      TypeScript interfaces.  Verify:
+        • Interfaces mirror the backend DTOs 1-to-1.  Flag drift.
+        • Enum-like string unions are used for status fields instead of raw
+          strings (e.g. type OrderStatus = 'PENDING' | 'CONFIRMED' | …).
+
+  # ── Docker ───────────────────────────────────
+  - path: "backend/Dockerfile"
+    instructions: |
+      Backend container image.  Verify:
+        • Multi-stage: stage 1 Maven build on a full JDK; stage 2 runs on
+          eclipse-temurin:17-jre-alpine (or equivalent minimal image).
+        • A non-root USER is declared before the final ENTRYPOINT.
+        • HEALTHCHECK instruction is present.
+        • .dockerignore exists in the same directory.
+        • No secrets (passwords, keys) appear in ENV or RUN lines.
+
+  - path: "frontend/Dockerfile"
+    instructions: |
+      Frontend container image.  Verify:
+        • Multi-stage: stage 1 Node build; stage 2 serves via nginx:alpine.
+        • nginx.conf enables gzip, sets caching headers for static assets, and
+          includes the SPA fallback (try_files … /index.html).
+        • Security headers (X-Content-Type-Options, X-Frame-Options, etc.) are
+          set in the nginx config or an entrypoint script.
+        • .dockerignore exists.
+
+  - path: "docker-compose*.yml"
+    instructions: |
+      Compose files.  Verify:
+        • All image tags are pinned (no `latest` in staging or prod files).
+        • Networks are explicitly defined; services are on the minimum required
+          networks.
+        • Volumes are used for PostgreSQL data persistence.
+        • Health checks are defined for the database and backend services.
+        • The .env file is referenced but never committed; a .env.example is
+          committed instead.
+
+  # ── CI / CD ──────────────────────────────────
+  - path: ".github/workflows/**"
+    instructions: |
+      GitHub Actions workflows.  Verify:
+        • Maven and npm dependency caches are configured.
+        • Docker layer caching is enabled (buildx or actions/cache).
+        • A Trivy vulnerability scan step runs before docker push.
+        • Production deploy jobs have an environment with
+          protection rules (manual approval gate).
+        • No secrets are echoed, logged, or written to files.
+        • Workflow triggers align with the branch strategy: CI on push to
+          develop and PRs to main; CD (staging) on merge to develop; CD (prod)
+          on merge to main with approval.
+        • Rollback workflow exists and can be triggered manually with a
+          target version/tag input.
+
+  # ── Terraform ────────────────────────────────
+  - path: "terraform/**"
+    instructions: |
+      Infrastructure as Code.  Verify:
+        • backend.tf configures S3 state with DynamoDB locking.
+        • All resources include the mandatory tags: Environment, Project,
+          ManagedBy.
+        • Modules live under terraform/modules/; the root of each environment
+          directory only calls modules.
+        • RDS resources set multi_az, storage_encrypted, and
+          backup_retention_period >= 7 in prod .tfvars.
+        • S3 buckets have versioning enabled and public access blocked.
+        • Security groups use restrictive ingress rules with explicit
+          descriptions.
+        • .tfvars files do not contain secrets; use AWS SSM or Vault
+          references instead.
+
+  # ── Ansible ──────────────────────────────────
+  - path: "ansible/**"
+    instructions: |
+      Configuration management.  Verify:
+        • Every role has a meta/main.yml.
+        • Tasks are idempotent (guarded by when, creates, or changed_when).
+        • Secrets are encrypted with Ansible Vault or fetched from an external
+          secret store at runtime; never in plain text.
+        • Jinja2 templates are validated (no undefined variables).
+        • Playbooks declare become: true only on tasks that actually need root.
+
+  # ── Kubernetes ────────────────────────────────
+  - path: "k8s/**"
+    instructions: |
+      Kubernetes manifests and Helm charts.  Verify:
+        • Every Deployment / StatefulSet has resource requests AND limits.
+        • Liveness and readiness probes are defined.
+        • Pod security context sets runAsNonRoot: true and drops ALL
+          capabilities.
+        • Helm chart has a separate values file per environment.
+        • Ingress annotations are present for SSL termination and rate
+          limiting.
+        • Secrets are not committed as base64 literals; reference an external
+          secret manager or use sealed-secrets / ESO.
+        • Namespace is explicitly set; no resources target the default
+          namespace.
