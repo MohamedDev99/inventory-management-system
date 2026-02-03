@@ -94,6 +94,18 @@ public class UserService implements UserDetailsService {
     }
 
     /**
+     * Get user passwordhash
+     * 
+     * @param id
+     * @return
+     */
+    public String getUserPasswordHash(Long id) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
+        return user.getPasswordHash();
+    }
+
+    /**
      * Get user by username
      */
     public UserResponseDto getUserByUsername(String username) {
