@@ -26,7 +26,7 @@ springdoc:
     path: /swagger-ui.html
     enabled: true
     tags-sorter: alpha
-    operations-sorter: alpha
+    operations-sorter: method
     display-request-duration: true
     doc-expansion: none
     default-models-expand-depth: 1
