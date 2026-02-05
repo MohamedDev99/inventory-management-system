@@ -15,49 +15,49 @@ jobs:
         if: github.event.action == 'opened' && github.event.issue
         uses: actions/add-to-project@v0.5.0
         with:
-          project-url: https://github.com/users/MohamedDev99/projects/PROJECT-NUMBER
+          project-url: https://github.com/users/MohamedDev99/projects/1
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          labeled: ''
+          labeled: ""
           label-operator: OR
 
       - name: Move assigned issues to In Progress
         if: github.event.action == 'assigned' && github.event.issue
         uses: actions/add-to-project@v0.5.0
         with:
-          project-url: https://github.com/users/MohamedDev99/projects/PROJECT-NUMBER
+          project-url: https://github.com/users/MohamedDev99/projects/1
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Move closed issues to Done
         if: github.event.action == 'closed' && github.event.issue
         uses: actions/add-to-project@v0.5.0
         with:
-          project-url: https://github.com/users/MohamedDev99/projects/PROJECT-NUMBER
+          project-url: https://github.com/users/MohamedDev99/projects/1
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Move reopened issues to Backlog
         if: github.event.action == 'reopened' && github.event.issue
         uses: actions/add-to-project@v0.5.0
         with:
-          project-url: https://github.com/users/MohamedDev99/projects/PROJECT-NUMBER
+          project-url: https://github.com/users/MohamedDev99/projects/1
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Move new PRs to In Progress
         if: github.event.action == 'opened' && github.event.pull_request
         uses: actions/add-to-project@v0.5.0
         with:
-          project-url: https://github.com/users/MohamedDev99/projects/PROJECT-NUMBER
+          project-url: https://github.com/users/MohamedDev99/projects/1
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Move PRs to Review when review requested
         if: github.event.action == 'review_requested' && github.event.pull_request
         uses: actions/add-to-project@v0.5.0
         with:
-          project-url: https://github.com/users/MohamedDev99/projects/PROJECT-NUMBER
+          project-url: https://github.com/users/MohamedDev99/projects/1
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Move merged PRs to Done
         if: github.event.pull_request.merged == true
         uses: actions/add-to-project@v0.5.0
         with:
-          project-url: https://github.com/users/MohamedDev99/projects/PROJECT-NUMBER
+          project-url: https://github.com/users/MohamedDev99/projects/1
           github-token: ${{ secrets.GITHUB_TOKEN }}
