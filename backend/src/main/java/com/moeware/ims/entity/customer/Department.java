@@ -6,6 +6,9 @@ import jakarta.validation.constraints.Size;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
+
+import com.moeware.ims.entity.BaseEntity;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.LocalDateTime;
@@ -25,7 +28,7 @@ import java.util.Set;
 @AllArgsConstructor
 @Builder
 @Schema(description = "Organizational department with hierarchical structure and employee management")
-public class Department {
+public class Department extends BaseEntity {
 
     @Schema(description = "Unique identifier", example = "1", accessMode = Schema.AccessMode.READ_ONLY)
     @Id
@@ -77,16 +80,6 @@ public class Department {
     @OneToMany(mappedBy = "department", cascade = CascadeType.ALL)
     @Builder.Default
     private Set<Employee> employees = new HashSet<>();
-
-    @Schema(description = "Timestamp when department was created", example = "2026-01-23T10:15:30", accessMode = Schema.AccessMode.READ_ONLY)
-    @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
-
-    @Schema(description = "Timestamp when department was last updated", example = "2026-01-23T10:15:30", accessMode = Schema.AccessMode.READ_ONLY)
-    @UpdateTimestamp
-    @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt;
 
     // Helper methods
     public void addEmployee(Employee employee) {

@@ -23,7 +23,7 @@ import java.util.Set;
 @AllArgsConstructor
 @Builder
 @Schema(description = "Product category with hierarchical structure supporting parent-child relationships")
-public class Category {
+public class Category extends BaseEntity {
 
     @Schema(description = "Unique identifier", example = "1", accessMode = Schema.AccessMode.READ_ONLY)
     @Id
@@ -65,16 +65,6 @@ public class Category {
     @OneToMany(mappedBy = "category", cascade = CascadeType.ALL)
     @Builder.Default
     private Set<Product> products = new HashSet<>();
-
-    @Schema(description = "Timestamp when category was created", example = "2026-01-23T10:15:30", accessMode = Schema.AccessMode.READ_ONLY)
-    @CreationTimestamp
-    @Column(nullable = false, updatable = false)
-    private LocalDateTime createdAt;
-
-    @Schema(description = "Timestamp when category was last updated", example = "2026-01-23T10:15:30", accessMode = Schema.AccessMode.READ_ONLY)
-    @UpdateTimestamp
-    @Column(nullable = false)
-    private LocalDateTime updatedAt;
 
     // Helper methods
     public void addChildCategory(Category child) {
