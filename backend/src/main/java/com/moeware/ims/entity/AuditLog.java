@@ -26,11 +26,13 @@ import java.util.Map;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @Schema(description = "Audit log entry")
 public class AuditLog {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @EqualsAndHashCode.Include
     @Schema(description = "Unique identifier for the audit log entry", example = "1", accessMode = Schema.AccessMode.READ_ONLY)
     private Long id;
 

@@ -29,45 +29,46 @@ import java.util.Collections;
 @AllArgsConstructor
 @Builder
 @ToString(exclude = "passwordHash")
-@EqualsAndHashCode(of = "id")
+@EqualsAndHashCode(onlyExplicitlyIncluded = true, callSuper = false)
+@Schema(description = "User entity with authentication and authorization details")
 public class User extends BaseEntity implements UserDetails {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @EqualsAndHashCode.Include
+    @Schema(description = "Unique user identifier", example = "1", accessMode = Schema.AccessMode.READ_ONLY)
     private Long id;
 
     @NotBlank(message = "Username is required")
     @Size(min = 3, max = 50, message = "Username must be between 3 and 50 characters")
     @Column(name = "username", nullable = false, unique = true, length = 50)
+    @Schema(description = "Unique username (3-50 characters)", example = "johndoe", requiredMode = Schema.RequiredMode.REQUIRED, minLength = 3, maxLength = 50)
     private String username;
 
     @NotBlank(message = "Email is required")
     @Email(message = "Email must be valid")
     @Column(name = "email", nullable = false, unique = true)
+    @Schema(description = "Valid email address", example = "john.doe@example.com", requiredMode = Schema.RequiredMode.REQUIRED, format = "email")
     private String email;
 
     @NotBlank(message = "Password is required")
     @Column(name = "password_hash", nullable = false)
+    @Schema(description = "BCrypt hashed password", accessMode = Schema.AccessMode.WRITE_ONLY, format = "password")
     private String passwordHash;
 
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "role_id", nullable = false)
+    @Schema(description = "User's role", example = "MANAGER")
     private Role role;
 
     @Column(name = "is_active", nullable = false)
     @Builder.Default
+    @Schema(description = "Account active status (false = soft deleted)", example = "true", defaultValue = "true")
     private Boolean isActive = true;
 
     @Column(name = "last_login")
+    @Schema(description = "Last successful login timestamp", example = "2026-01-28T10:30:00", accessMode = Schema.AccessMode.READ_ONLY)
     private LocalDateTime lastLogin;
-
-    // @CreationTimestamp
-    // @Column(name = "created_at", nullable = false, updatable = false)
-    // private LocalDateTime createdAt;
-
-    // @UpdateTimestamp
-    // @Column(name = "updated_at", nullable = false)
-    // private LocalDateTime updatedAt;
 
     // ==========================================
     // UserDetails Implementation

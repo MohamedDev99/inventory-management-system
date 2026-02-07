@@ -22,7 +22,7 @@ import java.util.Set;
 @AllArgsConstructor
 @Builder
 @ToString(exclude = "users")
-@EqualsAndHashCode(of = "id")
+@Schema(description = "Role entity for Role-Based Access Control (RBAC)")
 public class Role extends BaseEntity {
 
     @Id
@@ -30,18 +30,18 @@ public class Role extends BaseEntity {
     private Long id;
 
     @Column(name = "name", nullable = false, unique = true, length = 50)
+    @Schema(description = "Role name (ADMIN, MANAGER, WAREHOUSE_STAFF, VIEWER)", example = "MANAGER", allowableValues = {
+            "ADMIN", "MANAGER", "WAREHOUSE_STAFF", "VIEWER" })
     private String name;
 
     @Column(name = "description", columnDefinition = "TEXT")
+    @Schema(description = "Role description", example = "Warehouse and order management")
     private String description;
-
-    // @CreationTimestamp
-    // @Column(name = "created_at", nullable = false, updatable = false)
-    // private LocalDateTime createdAt;
 
     // Bidirectional relationship with User
     @OneToMany(mappedBy = "role", fetch = FetchType.LAZY)
     @Builder.Default
+    @Schema(description = "Users associated with this role")
     private Set<User> users = new HashSet<>();
 
     /**
