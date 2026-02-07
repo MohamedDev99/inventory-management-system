@@ -28,7 +28,7 @@ import java.util.Set;
 @AllArgsConstructor
 @Builder
 @Schema(description = "Customer information including contact details and addresses for billing and shipping")
-public class Customer {
+public class Customer extends BaseEntity {
 
     @Schema(description = "Unique identifier", example = "1", accessMode = Schema.AccessMode.READ_ONLY)
     @Id
@@ -146,21 +146,10 @@ public class Customer {
     @Builder.Default
     private Boolean isActive = true;
 
-    // @Schema(description = "Sales orders placed by this customer", accessMode =
-    // Schema.AccessMode.READ_ONLY)
-    // @OneToMany(mappedBy = "customer", cascade = CascadeType.ALL)
-    // @Builder.Default
-    // private Set<SalesOrder> salesOrders = new HashSet<>();
-
-    @Schema(description = "Timestamp when customer was created", example = "2026-01-23T10:15:30", accessMode = Schema.AccessMode.READ_ONLY)
-    @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
-
-    @Schema(description = "Timestamp when customer was last updated", example = "2026-01-23T10:15:30", accessMode = Schema.AccessMode.READ_ONLY)
-    @UpdateTimestamp
-    @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt;
+    @Schema(description = "Sales orders placed by this customer", accessMode = Schema.AccessMode.READ_ONLY)
+    @OneToMany(mappedBy = "customer", cascade = CascadeType.ALL)
+    @Builder.Default
+    private Set<SalesOrder> salesOrders = new HashSet<>();
 
     // Helper methods
     public String getFullBillingAddress() {

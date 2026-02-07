@@ -30,7 +30,7 @@ import java.util.Collections;
 @Builder
 @ToString(exclude = "passwordHash")
 @EqualsAndHashCode(of = "id")
-public class User implements UserDetails {
+public class User extends BaseEntity implements UserDetails {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -61,13 +61,13 @@ public class User implements UserDetails {
     @Column(name = "last_login")
     private LocalDateTime lastLogin;
 
-    @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
+    // @CreationTimestamp
+    // @Column(name = "created_at", nullable = false, updatable = false)
+    // private LocalDateTime createdAt;
 
-    @UpdateTimestamp
-    @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt;
+    // @UpdateTimestamp
+    // @Column(name = "updated_at", nullable = false)
+    // private LocalDateTime updatedAt;
 
     // ==========================================
     // UserDetails Implementation

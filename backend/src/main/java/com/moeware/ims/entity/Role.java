@@ -23,7 +23,7 @@ import java.util.Set;
 @Builder
 @ToString(exclude = "users")
 @EqualsAndHashCode(of = "id")
-public class Role {
+public class Role extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -35,9 +35,9 @@ public class Role {
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
-    @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
+    // @CreationTimestamp
+    // @Column(name = "created_at", nullable = false, updatable = false)
+    // private LocalDateTime createdAt;
 
     // Bidirectional relationship with User
     @OneToMany(mappedBy = "role", fetch = FetchType.LAZY)
