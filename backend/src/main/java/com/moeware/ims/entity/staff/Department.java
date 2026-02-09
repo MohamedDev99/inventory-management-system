@@ -7,7 +7,7 @@ import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
-import com.moeware.ims.entity.BaseEntity;
+import com.moeware.ims.entity.VersionedEntity;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
@@ -28,7 +28,7 @@ import java.util.Set;
 @AllArgsConstructor
 @Builder
 @Schema(description = "Organizational department with hierarchical structure and employee management")
-public class Department extends BaseEntity {
+public class Department extends AuditableEntity {
 
     @Schema(description = "Unique identifier", example = "1", accessMode = Schema.AccessMode.READ_ONLY)
     @Id

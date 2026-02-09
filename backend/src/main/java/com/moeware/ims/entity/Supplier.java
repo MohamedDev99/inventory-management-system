@@ -24,7 +24,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 @AllArgsConstructor
 @Builder
 @Schema(description = "Represents a supplier of products")
-public class Supplier extends BaseEntity {
+public class Supplier extends VersionedEntity {
 
         @Id
         @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -84,6 +84,6 @@ public class Supplier extends BaseEntity {
 
         @Column(name = "is_active", nullable = false)
         @Builder.Default
-        @Schema(description = "Supplier rating from 1 (poor) to 5 (excellent)", example = "4", minimum = "1", maximum = "5")
+        @Schema(description = "Whether the supplier is currently active", example = "true", defaultValue = "true")
         private Boolean isActive = true;
 }

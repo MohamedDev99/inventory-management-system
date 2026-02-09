@@ -27,7 +27,7 @@ import java.util.Set;
 @AllArgsConstructor
 @Builder
 @Schema(description = "Product catalog item with pricing, inventory settings, and category classification")
-public class Product extends BaseEntity {
+public class Product extends VersionedEntity {
 
     @Schema(description = "Unique identifier", example = "1", accessMode = Schema.AccessMode.READ_ONLY)
     @Id

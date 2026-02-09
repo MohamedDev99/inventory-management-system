@@ -1,6 +1,6 @@
 package com.moeware.ims.entity.transaction;
 
-import com.moeware.ims.entity.BaseEntity;
+import com.moeware.ims.entity.VersionedEntity;
 import com.moeware.ims.entity.Customer;
 import com.moeware.ims.entity.User;
 import com.moeware.ims.enums.InvoiceStatus;
@@ -29,7 +29,7 @@ import java.time.LocalDate;
 @AllArgsConstructor
 @Builder
 @Schema(description = "Invoice document for customer billing")
-public class Invoice extends BaseEntity {
+public class Invoice extends VersionedEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

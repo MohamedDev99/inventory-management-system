@@ -1,6 +1,6 @@
 package com.moeware.ims.entity.transaction;
 
-import com.moeware.ims.entity.BaseEntity;
+import com.moeware.ims.entity.VersionedEntity;
 import com.moeware.ims.entity.Customer;
 import com.moeware.ims.entity.User;
 import com.moeware.ims.entity.Warehouse;
@@ -31,7 +31,7 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 @Schema(description = "Sales Order representing a customer's purchase")
-public class SalesOrder extends BaseEntity {
+public class SalesOrder extends VersionedEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -40,6 +40,7 @@ public class SalesOrder extends BaseEntity {
 
     @NotBlank(message = "SO number is required")
     @Size(max = 50)
+    @Pattern(regexp = "^SO-\\d{8}-\\d+$", message = "SO number must follow SO-YYYYMMDD-SEQ format")
     @Column(name = "so_number", nullable = false, unique = true)
     @Schema(description = "Unique sales order number", example = "SO-20260131-0001", requiredMode = Schema.RequiredMode.REQUIRED)
     private String soNumber;

@@ -3,6 +3,7 @@ package com.moeware.ims.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.LocalDateTime;
 import java.util.HashSet;
@@ -23,7 +24,7 @@ import java.util.Set;
 @Builder
 @ToString(exclude = "users")
 @Schema(description = "Role entity for Role-Based Access Control (RBAC)")
-public class Role extends BaseEntity {
+public class Role {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -37,6 +38,11 @@ public class Role extends BaseEntity {
     @Column(name = "description", columnDefinition = "TEXT")
     @Schema(description = "Role description", example = "Warehouse and order management")
     private String description;
+
+    @CreatedDate
+    @Column(name = "created_at", nullable = false, updatable = false)
+    @Schema(description = "Timestamp when the role was created", example = "2026-01-31T10:30:00", accessMode = Schema.AccessMode.READ_ONLY)
+    private LocalDateTime createdAt;
 
     // Bidirectional relationship with User
     @OneToMany(mappedBy = "role", fetch = FetchType.LAZY)

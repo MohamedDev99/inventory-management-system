@@ -1,6 +1,6 @@
 package com.moeware.ims.entity.transaction;
 
-import com.moeware.ims.entity.BaseEntity;
+import com.moeware.ims.entity.VersionedEntity;
 import com.moeware.ims.entity.User;
 import com.moeware.ims.entity.Warehouse;
 import com.moeware.ims.enums.ShipmentStatus;
@@ -8,6 +8,7 @@ import com.moeware.ims.enums.ShippingMethod;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
 import lombok.*;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -28,7 +29,7 @@ import java.time.LocalDate;
 @AllArgsConstructor
 @Builder
 @Schema(description = "Shipment tracking information for sales order delivery")
-public class Shipment extends BaseEntity {
+public class Shipment extends VersionedEntity {
 
         @Id
         @GeneratedValue(strategy = GenerationType.IDENTITY)

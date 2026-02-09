@@ -28,7 +28,7 @@ import java.util.Set;
 @AllArgsConstructor
 @Builder
 @Schema(description = "Customer information including contact details and addresses for billing and shipping")
-public class Customer extends BaseEntity {
+public class Customer extends VersionedEntity {
 
     @Schema(description = "Unique identifier", example = "1", accessMode = Schema.AccessMode.READ_ONLY)
     @Id
@@ -147,7 +147,7 @@ public class Customer extends BaseEntity {
     private Boolean isActive = true;
 
     @Schema(description = "Sales orders placed by this customer", accessMode = Schema.AccessMode.READ_ONLY)
-    @OneToMany(mappedBy = "customer", cascade = CascadeType.ALL)
+    @OneToMany(mappedBy = "customer", cascade = { CascadeType.PERSIST, CascadeType.MERGE })
     @Builder.Default
     private Set<SalesOrder> salesOrders = new HashSet<>();
 

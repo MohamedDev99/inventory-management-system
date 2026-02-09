@@ -1,6 +1,6 @@
 package com.moeware.ims.entity.transaction;
 
-import com.moeware.ims.entity.BaseEntity;
+import com.moeware.ims.entity.VersionedEntity;
 import com.moeware.ims.entity.Product;
 import com.moeware.ims.entity.User;
 import com.moeware.ims.entity.Warehouse;
@@ -8,6 +8,8 @@ import com.moeware.ims.enums.MovementType;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
 import lombok.*;
+
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.LocalDateTime;
 
@@ -30,7 +32,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Builder
 @Schema(description = "Record of inventory movement between locations or during transactions")
-public class InventoryMovement extends BaseEntity {
+public class InventoryMovement extends VersionedEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

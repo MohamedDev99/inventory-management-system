@@ -10,7 +10,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 import io.swagger.v3.oas.annotations.media.Schema;
 
-import com.moeware.ims.entity.BaseEntity;
+import com.moeware.ims.entity.VersionedEntity;
 import com.moeware.ims.entity.User;
 import com.moeware.ims.entity.customer.Department;
 
@@ -36,7 +36,7 @@ import java.util.Set;
 @AllArgsConstructor
 @Builder
 @Schema(description = "Employee record with job information, organizational hierarchy, and system access")
-public class Employee extends BaseEntity {
+public class Employee extends VersionedEntity {
 
     @Schema(description = "Unique identifier", example = "1", accessMode = Schema.AccessMode.READ_ONLY)
     @Id

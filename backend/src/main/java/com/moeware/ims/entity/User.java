@@ -10,6 +10,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.LocalDateTime;
 import java.util.Collection;
@@ -31,7 +32,7 @@ import java.util.Collections;
 @ToString(exclude = "passwordHash")
 @EqualsAndHashCode(onlyExplicitlyIncluded = true, callSuper = false)
 @Schema(description = "User entity with authentication and authorization details")
-public class User extends BaseEntity implements UserDetails {
+public class User extends VersionedEntity implements UserDetails {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

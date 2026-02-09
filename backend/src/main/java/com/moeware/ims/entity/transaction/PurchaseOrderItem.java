@@ -1,7 +1,7 @@
 package com.moeware.ims.entity.transaction;
 
-import com.moeware.ims.entity.BaseEntity;
-import com.moeware.ims.entity.Product;
+import com.moeware.ims.entity.VersionedEntity;
+import com.moeware.ims.entity.product.Product;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
 import lombok.*;
@@ -27,7 +27,7 @@ import javax.swing.SwingContainer;
 @AllArgsConstructor
 @Builder
 @Schema(description = "Line item in a purchase order")
-public class PurchaseOrderItem extends BaseEntity {
+public class PurchaseOrderItem extends VersionedEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

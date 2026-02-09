@@ -8,7 +8,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 import io.swagger.v3.oas.annotations.media.Schema;
 
-import com.moeware.ims.entity.BaseEntity;
+import com.moeware.ims.entity.VersionedEntity;
 import com.moeware.ims.entity.User;
 
 import java.math.BigDecimal;
@@ -28,7 +28,7 @@ import java.util.Set;
 @AllArgsConstructor
 @Builder
 @Schema(description = "Physical warehouse location for inventory storage and management")
-public class Warehouse extends BaseEntity {
+public class Warehouse extends VersionedEntity {
 
     @Schema(description = "Unique identifier", example = "1", accessMode = Schema.AccessMode.READ_ONLY)
     @Id

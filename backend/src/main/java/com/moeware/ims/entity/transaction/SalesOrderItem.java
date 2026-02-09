@@ -1,10 +1,11 @@
 package com.moeware.ims.entity.transaction;
 
-import com.moeware.ims.entity.BaseEntity;
+import com.moeware.ims.entity.VersionedEntity;
 import com.moeware.ims.entity.Product;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
 import lombok.*;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.math.BigDecimal;
 
@@ -23,7 +24,7 @@ import java.math.BigDecimal;
 @AllArgsConstructor
 @Builder
 @Schema(description = "Line item in a sales order representing one product")
-public class SalesOrderItem extends BaseEntity {
+public class SalesOrderItem extends VersionedEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

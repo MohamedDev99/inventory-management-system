@@ -1,6 +1,6 @@
 package com.moeware.ims.entity.transaction;
 
-import com.moeware.ims.entity.BaseEntity;
+import com.moeware.ims.entity.VersionedEntity;
 import com.moeware.ims.entity.Supplier;
 import com.moeware.ims.entity.User;
 import com.moeware.ims.entity.Warehouse;
@@ -33,7 +33,7 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 @Schema(description = "Represents a purchase order placed by a supplier")
-public class PurchaseOrder extends BaseEntity {
+public class PurchaseOrder extends VersionedEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -140,6 +140,7 @@ public class PurchaseOrder extends BaseEntity {
     public void calculateTotals() {
         this.subtotal = items.stream()
                 .map(PurchaseOrderItem::getLineTotal)
+                .map(total -> total != null ? total : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         this.totalAmount = this.subtotal

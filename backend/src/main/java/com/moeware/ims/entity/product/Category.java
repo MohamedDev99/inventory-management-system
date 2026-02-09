@@ -7,6 +7,8 @@ import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
+import com.moeware.ims.entity.AuditableEntity;
+
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
@@ -23,7 +25,7 @@ import java.util.Set;
 @AllArgsConstructor
 @Builder
 @Schema(description = "Product category with hierarchical structure supporting parent-child relationships")
-public class Category extends BaseEntity {
+public class Category extends AuditableEntity {
 
     @Schema(description = "Unique identifier", example = "1", accessMode = Schema.AccessMode.READ_ONLY)
     @Id
