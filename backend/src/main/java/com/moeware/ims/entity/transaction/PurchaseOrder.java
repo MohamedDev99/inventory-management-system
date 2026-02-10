@@ -42,6 +42,7 @@ public class PurchaseOrder extends VersionedEntity {
 
     @NotBlank(message = "PO number is required")
     @Size(max = 50)
+    @Pattern(regexp = "^PO-\\d{8}-\\d{4,}$", message = "PO number must match PO-YYYYMMDD-SEQ")
     @Column(name = "po_number", nullable = false, unique = true)
     @Schema(description = "Unique purchase order number", example = "PO-20260131-0001", requiredMode = Schema.RequiredMode.REQUIRED)
     private String poNumber;

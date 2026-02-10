@@ -2,7 +2,6 @@ package com.moeware.ims.entity.transaction;
 
 import com.moeware.ims.entity.VersionedEntity;
 import com.moeware.ims.entity.staff.Customer;
-import com.moeware.ims.entity.transaction.SalesOrder;
 import com.moeware.ims.entity.User;
 import com.moeware.ims.enums.InvoiceStatus;
 

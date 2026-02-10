@@ -99,7 +99,7 @@ public class StockAdjustment extends VersionedEntity {
         @Column(length = 20, nullable = false)
         @Schema(description = "Approval status of the adjustment", example = "PENDING", allowableValues = { "PENDING",
                         "APPROVED", "REJECTED" }, defaultValue = "PENDING")
-        private StockAdjustmentStatus status = "PENDING"; // PENDING, APPROVED, REJECTED
+        private StockAdjustmentStatus status = StockAdjustmentStatus.PENDING; // PENDING, APPROVED, REJECTED
 
         @Column(columnDefinition = "TEXT")
         @Schema(description = "Additional notes explaining the adjustment in detail", example = "Items found damaged during quality inspection. Box was wet, products are unusable.")

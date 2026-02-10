@@ -1,4 +1,4 @@
-package com.moeware.ims.entity;
+package com.moeware.ims.entity.product;
 
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
