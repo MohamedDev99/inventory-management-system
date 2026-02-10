@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 
 import com.moeware.ims.entity.VersionedEntity;
 import com.moeware.ims.entity.User;
+import com.moeware.ims.entity.product.InventoryItem;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;

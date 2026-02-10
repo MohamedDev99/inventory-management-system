@@ -13,6 +13,8 @@ import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
 
+import com.moeware.ims.entity.VersionedEntity;
+
 @Entity
 @Table(name = "products", indexes = {
         @Index(name = "idx_products_sku", columnList = "sku", unique = true),

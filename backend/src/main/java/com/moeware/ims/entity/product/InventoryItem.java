@@ -10,7 +10,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import com.moeware.ims.entity.VersionedEntity;
-import com.moeware.ims.entity.product.Product;
+import com.moeware.ims.entity.staff.Warehouse;
 
 import java.time.LocalDateTime;
 

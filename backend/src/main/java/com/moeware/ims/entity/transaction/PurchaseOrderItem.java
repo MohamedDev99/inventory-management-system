@@ -2,14 +2,13 @@ package com.moeware.ims.entity.transaction;
 
 import com.moeware.ims.entity.VersionedEntity;
 import com.moeware.ims.entity.product.Product;
+
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
 import lombok.*;
-
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.math.BigDecimal;
-
 import javax.swing.SwingContainer;
 
 /**

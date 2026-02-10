@@ -1,6 +1,9 @@
 package com.moeware.ims.entity;
 
 import com.moeware.ims.entity.AppendOnlyEntity;
+import com.moeware.ims.enums.NotificationPriority;
+import com.moeware.ims.enums.NotificationType;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.*;
 import lombok.*;
@@ -93,48 +96,6 @@ public class Notification extends AppendOnlyEntity {
     private LocalDateTime readAt;
 
     /**
-     * Notification type enumeration
-     */
-    @Schema(description = "Notification type categories")
-    public enum NotificationType {
-        @Schema(description = "Alert for products below reorder level")
-        LOW_STOCK,
-
-        @Schema(description = "Notification when a purchase order is approved")
-        ORDER_APPROVED,
-
-        @Schema(description = "Notification when a purchase order is received")
-        ORDER_RECEIVED,
-
-        @Schema(description = "Notification about shipment status updates")
-        SHIPMENT,
-
-        @Schema(description = "Notification about stock adjustment approvals or rejections")
-        STOCK_ADJUSTMENT,
-
-        @Schema(description = "General system announcements and notifications")
-        SYSTEM
-    }
-
-    /**
-     * Notification priority levels
-     */
-    @Schema(description = "Priority levels for notifications")
-    public enum NotificationPriority {
-        @Schema(description = "Low priority - informational only")
-        LOW,
-
-        @Schema(description = "Medium priority - standard notification (default)")
-        MEDIUM,
-
-        @Schema(description = "High priority - requires attention")
-        HIGH,
-
-        @Schema(description = "Critical priority - urgent action required")
-        CRITICAL
-    }
-
-    /**
      * Marks this notification as read and sets the read timestamp
      */
     public void markAsRead() {
@@ -189,8 +150,16 @@ public class Notification extends AppendOnlyEntity {
      * @return Truncated message with ellipsis if needed
      */
     public String getMessagePreview(int maxLength) {
-        if (message == null || message.length() <= maxLength) {
+        if (message == null) {
+            return null;
+        }
+
+        if (message.length() <= maxLength) {
             return message;
+        }
+
+        if (maxLength <= 3) {
+            return message.substring(0, Math.max(0, maxLength));
         }
         return message.substring(0, maxLength - 3) + "...";
     }

@@ -14,6 +14,9 @@ import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
 
+import com.moeware.ims.entity.VersionedEntity;
+import com.moeware.ims.entity.transaction.SalesOrder;
+
 @Entity
 @Table(name = "customers", indexes = {
         @Index(name = "idx_customers_code", columnList = "customer_code", unique = true),

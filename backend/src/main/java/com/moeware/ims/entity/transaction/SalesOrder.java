@@ -1,13 +1,15 @@
 package com.moeware.ims.entity.transaction;
 
 import com.moeware.ims.entity.VersionedEntity;
-import com.moeware.ims.entity.Customer;
+import com.moeware.ims.entity.staff.Customer;
+import com.moeware.ims.entity.staff.Warehouse;
 import com.moeware.ims.entity.User;
-import com.moeware.ims.entity.Warehouse;
 import com.moeware.ims.enums.SalesOrderStatus;
+
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
 import lombok.*;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -67,7 +69,8 @@ public class SalesOrder extends VersionedEntity {
 
     @Size(max = 50)
     @Column(name = "customer_phone")
-    @Schema(description = "Customer phone number at time of order", example = "+1-555-0200")
+    @Pattern(regexp = "^\\+[1-9]\\d{1,14}$", message = "Phone must be in E.164 format")
+    @Schema(description = "Customer phone number at time of order", example = "+15550200")
     private String customerPhone;
 
     @NotBlank(message = "Shipping address is required")

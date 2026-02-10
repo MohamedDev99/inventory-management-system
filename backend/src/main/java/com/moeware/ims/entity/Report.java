@@ -1,6 +1,9 @@
 package com.moeware.ims.entity;
 
 import com.moeware.ims.entity.AppendOnlyEntity;
+import com.moeware.ims.enums.ReportStatus;
+import com.moeware.ims.enums.ReportType;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.*;
 import lombok.*;
@@ -98,42 +101,6 @@ public class Report extends AppendOnlyEntity {
     @Column(name = "row_count")
     @Schema(description = "Number of data rows/records included in the report", example = "1247", accessMode = Schema.AccessMode.READ_ONLY)
     private Integer rowCount;
-
-    /**
-     * Report type enumeration
-     */
-    @Schema(description = "Available report types in the system")
-    public enum ReportType {
-        @Schema(description = "Stock valuation report showing inventory value by warehouse")
-        STOCK_VALUATION,
-
-        @Schema(description = "Historical inventory movement tracking report")
-        MOVEMENT_HISTORY,
-
-        @Schema(description = "Sales performance and analysis report")
-        SALES_ANALYSIS,
-
-        @Schema(description = "Low stock alert report for reorder management")
-        LOW_STOCK,
-
-        @Schema(description = "Purchase order history and supplier performance report")
-        PURCHASE_HISTORY
-    }
-
-    /**
-     * Report generation status enumeration
-     */
-    @Schema(description = "Report generation status lifecycle")
-    public enum ReportStatus {
-        @Schema(description = "Report generation request is queued and waiting to be processed")
-        PENDING,
-
-        @Schema(description = "Report has been successfully generated and is available for download")
-        COMPLETED,
-
-        @Schema(description = "Report generation failed due to an error")
-        FAILED
-    }
 
     /**
      * Marks the report as completed and sets the generation timestamp

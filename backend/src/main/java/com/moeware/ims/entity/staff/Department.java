@@ -4,16 +4,13 @@ import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.*;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
-
-import com.moeware.ims.entity.VersionedEntity;
-
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
+
+import com.moeware.ims.entity.AuditableEntity;
 
 @Entity
 @Table(name = "departments", indexes = {

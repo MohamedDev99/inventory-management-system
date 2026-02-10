@@ -1,14 +1,14 @@
 package com.moeware.ims.entity.transaction;
 
 import com.moeware.ims.entity.VersionedEntity;
-import com.moeware.ims.entity.Supplier;
+import com.moeware.ims.entity.product.Supplier;
 import com.moeware.ims.entity.User;
-import com.moeware.ims.entity.Warehouse;
+import com.moeware.ims.entity.staff.Warehouse;
 import com.moeware.ims.enums.PurchaseOrderStatus;
+
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
 import lombok.*;
-
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.math.BigDecimal;

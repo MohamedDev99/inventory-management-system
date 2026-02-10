@@ -1,6 +1,7 @@
 package com.moeware.ims.entity;
 
 import com.moeware.ims.enums.AuditAction;
+
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
 import lombok.*;

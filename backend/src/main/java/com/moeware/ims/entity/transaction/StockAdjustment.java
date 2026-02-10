@@ -1,9 +1,9 @@
 package com.moeware.ims.entity.transaction;
 
 import com.moeware.ims.entity.VersionedEntity;
-import com.moeware.ims.entity.Product;
+import com.moeware.ims.entity.product.Product;
 import com.moeware.ims.entity.User;
-import com.moeware.ims.entity.Warehouse;
+import com.moeware.ims.entity.staff.Warehouse;
 import com.moeware.ims.enums.AdjustmentReason;
 import com.moeware.ims.enums.AdjustmentType;
 import com.moeware.ims.enums.StockAdjustmentStatus;
@@ -11,6 +11,7 @@ import com.moeware.ims.enums.StockAdjustmentStatus;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
 import lombok.*;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.LocalDateTime;
 
@@ -62,8 +63,8 @@ public class StockAdjustment extends VersionedEntity {
         @Schema(description = "Inventory quantity after the adjustment", example = "98", requiredMode = Schema.RequiredMode.REQUIRED)
         private Integer quantityAfter;
 
+        // @Min(value = 0, message = "Quantity change must be at least 0")
         @NotNull(message = "Quantity change is required")
-        @Min(value = 0, message = "Quantity change must be at least 0")
         @Column(name = "quantity_change", nullable = false)
         @Schema(description = "Change in quantity (positive for additions, negative for removals)", example = "-2", accessMode = Schema.AccessMode.READ_ONLY)
         private Integer quantityChange;
