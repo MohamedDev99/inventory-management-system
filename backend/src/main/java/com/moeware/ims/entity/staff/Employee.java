@@ -6,12 +6,10 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.*;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
 import io.swagger.v3.oas.annotations.media.Schema;
 
+import com.moeware.ims.entity.VersionedEntity;
 import com.moeware.ims.entity.User;
-import com.moeware.ims.entity.customer.Department;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -35,7 +33,7 @@ import java.util.Set;
 @AllArgsConstructor
 @Builder
 @Schema(description = "Employee record with job information, organizational hierarchy, and system access")
-public class Employee {
+public class Employee extends VersionedEntity {
 
     @Schema(description = "Unique identifier", example = "1", accessMode = Schema.AccessMode.READ_ONLY)
     @Id
@@ -114,16 +112,6 @@ public class Employee {
     @Column(name = "is_active", nullable = false)
     @Builder.Default
     private Boolean isActive = true;
-
-    @Schema(description = "Timestamp when employee record was created", example = "2026-01-23T10:15:30", accessMode = Schema.AccessMode.READ_ONLY)
-    @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
-
-    @Schema(description = "Timestamp when employee record was last updated", example = "2026-01-23T10:15:30", accessMode = Schema.AccessMode.READ_ONLY)
-    @UpdateTimestamp
-    @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt;
 
     // Helper methods
     public String getFullName() {

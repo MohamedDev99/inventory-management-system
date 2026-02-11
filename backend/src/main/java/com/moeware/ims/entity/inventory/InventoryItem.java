@@ -1,4 +1,4 @@
-package com.moeware.ims.entity.product;
+package com.moeware.ims.entity.inventory;
 
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Min;
@@ -9,7 +9,8 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 import io.swagger.v3.oas.annotations.media.Schema;
 
-import com.moeware.ims.entity.product.Product;
+import com.moeware.ims.entity.VersionedEntity;
+import com.moeware.ims.entity.staff.Warehouse;
 
 import java.time.LocalDateTime;
 
@@ -27,7 +28,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Builder
 @Schema(description = "Current stock level for a specific product at a specific warehouse location")
-public class InventoryItem {
+public class InventoryItem extends VersionedEntity {
 
     @Schema(description = "Unique identifier", example = "1", accessMode = Schema.AccessMode.READ_ONLY)
     @Id
@@ -61,16 +62,6 @@ public class InventoryItem {
     @Schema(description = "Last physical stock count timestamp", example = "2026-01-20T14:30:00")
     @Column
     private LocalDateTime lastStockCheck;
-
-    @Schema(description = "Timestamp when inventory record was created", example = "2026-01-23T10:15:30", accessMode = Schema.AccessMode.READ_ONLY)
-    @CreationTimestamp
-    @Column(nullable = false, updatable = false)
-    private LocalDateTime createdAt;
-
-    @Schema(description = "Timestamp when inventory was last updated", example = "2026-01-23T10:15:30", accessMode = Schema.AccessMode.READ_ONLY)
-    @UpdateTimestamp
-    @Column(nullable = false)
-    private LocalDateTime updatedAt;
 
     // Helper methods
     public void addStock(Integer amount) {

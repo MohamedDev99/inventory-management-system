@@ -1,4 +1,4 @@
-package com.moeware.ims.entity.product;
+package com.moeware.ims.entity.inventory;
 
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
@@ -12,6 +12,8 @@ import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
+
+import com.moeware.ims.entity.VersionedEntity;
 
 @Entity
 @Table(name = "products", indexes = {
@@ -27,7 +29,7 @@ import java.util.Set;
 @AllArgsConstructor
 @Builder
 @Schema(description = "Product catalog item with pricing, inventory settings, and category classification")
-public class Product {
+public class Product extends VersionedEntity {
 
     @Schema(description = "Unique identifier", example = "1", accessMode = Schema.AccessMode.READ_ONLY)
     @Id
@@ -108,16 +110,6 @@ public class Product {
     @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private Set<InventoryItem> inventoryItems = new HashSet<>();
-
-    @Schema(description = "Timestamp when product was created", example = "2026-01-23T10:15:30", accessMode = Schema.AccessMode.READ_ONLY)
-    @CreationTimestamp
-    @Column(nullable = false, updatable = false)
-    private LocalDateTime createdAt;
-
-    @Schema(description = "Timestamp when product was last updated", example = "2026-01-23T10:15:30", accessMode = Schema.AccessMode.READ_ONLY)
-    @UpdateTimestamp
-    @Column(nullable = false)
-    private LocalDateTime updatedAt;
 
     // Helper methods
     public BigDecimal getProfitMargin() {

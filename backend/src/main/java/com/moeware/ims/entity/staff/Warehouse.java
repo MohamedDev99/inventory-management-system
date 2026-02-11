@@ -1,4 +1,4 @@
-package com.moeware.ims.entity.product;
+package com.moeware.ims.entity.inventory;
 
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
@@ -8,7 +8,9 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 import io.swagger.v3.oas.annotations.media.Schema;
 
+import com.moeware.ims.entity.VersionedEntity;
 import com.moeware.ims.entity.User;
+import com.moeware.ims.entity.inventory.InventoryItem;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -27,7 +29,7 @@ import java.util.Set;
 @AllArgsConstructor
 @Builder
 @Schema(description = "Physical warehouse location for inventory storage and management")
-public class Warehouse {
+public class Warehouse extends VersionedEntity {
 
     @Schema(description = "Unique identifier", example = "1", accessMode = Schema.AccessMode.READ_ONLY)
     @Id
@@ -91,16 +93,6 @@ public class Warehouse {
     @OneToMany(mappedBy = "warehouse", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private Set<InventoryItem> inventoryItems = new HashSet<>();
-
-    @Schema(description = "Timestamp when warehouse was created", example = "2026-01-23T10:15:30", accessMode = Schema.AccessMode.READ_ONLY)
-    @CreationTimestamp
-    @Column(nullable = false, updatable = false)
-    private LocalDateTime createdAt;
-
-    @Schema(description = "Timestamp when warehouse was last updated", example = "2026-01-23T10:15:30", accessMode = Schema.AccessMode.READ_ONLY)
-    @UpdateTimestamp
-    @Column(nullable = false)
-    private LocalDateTime updatedAt;
 
     // Helper methods
     public String getFullAddress() {
