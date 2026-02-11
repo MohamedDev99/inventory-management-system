@@ -1,7 +1,7 @@
 package com.moeware.ims.entity.transaction;
 
 import com.moeware.ims.entity.VersionedEntity;
-import com.moeware.ims.entity.product.Product;
+import com.moeware.ims.entity.inventory.Product;
 
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;

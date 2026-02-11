@@ -7,7 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import com.moeware.ims.entity.product.Product;
+import com.moeware.ims.entity.inventory.Product;
 
 import java.util.List;
 import java.util.Optional;

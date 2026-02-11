@@ -1,4 +1,4 @@
-package com.moeware.ims.entity.product;
+package com.moeware.ims.entity.inventory;
 
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;

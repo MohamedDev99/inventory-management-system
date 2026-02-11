@@ -1,7 +1,7 @@
 package com.moeware.ims.entity.transaction;
 
 import com.moeware.ims.entity.VersionedEntity;
-import com.moeware.ims.entity.product.Supplier;
+import com.moeware.ims.entity.inventory.Supplier;
 import com.moeware.ims.entity.User;
 import com.moeware.ims.entity.staff.Warehouse;
 import com.moeware.ims.enums.PurchaseOrderStatus;

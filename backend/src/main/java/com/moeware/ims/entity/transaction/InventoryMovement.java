@@ -2,7 +2,7 @@ package com.moeware.ims.entity.transaction;
 
 import com.moeware.ims.entity.VersionedEntity;
 import com.moeware.ims.entity.User;
-import com.moeware.ims.entity.product.Product;
+import com.moeware.ims.entity.inventory.Product;
 import com.moeware.ims.entity.staff.Warehouse;
 import com.moeware.ims.enums.MovementType;
 import jakarta.persistence.*;
