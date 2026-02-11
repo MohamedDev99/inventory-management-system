@@ -3,6 +3,7 @@ package com.moeware.ims.entity.inventory;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
 import lombok.*;
+import com.moeware.ims.entity.VersionedEntity;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
