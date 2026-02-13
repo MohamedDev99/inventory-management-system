@@ -1,12 +1,12 @@
 
 package com.moeware.ims.repository;
 
+import java.util.Optional;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import com.moeware.ims.entity.Role;
-
-import java.util.Optional;
 
 /**
  * Repository for Role entity

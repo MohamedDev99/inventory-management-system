@@ -1,17 +1,30 @@
 package com.moeware.ims.entity.inventory;
 
-import jakarta.persistence.*;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
-import lombok.*;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
+import java.util.HashSet;
+import java.util.Set;
 
 import com.moeware.ims.entity.AuditableEntity;
 
-import java.time.LocalDateTime;
-import java.util.HashSet;
-import java.util.Set;
+import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.Table;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Entity
 @Table(name = "categories", indexes = {
@@ -32,13 +45,13 @@ public class Category extends AuditableEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Schema(description = "Category name", example = "Electronics", required = true, maxLength = 100)
+    @Schema(description = "Category name", example = "Electronics", requiredMode = Schema.RequiredMode.REQUIRED, maxLength = 100)
     @NotBlank(message = "Category name is required")
     @Size(max = 100, message = "Category name must not exceed 100 characters")
     @Column(nullable = false, unique = true, length = 100)
     private String name;
 
-    @Schema(description = "Unique category code", example = "ELEC", required = true, maxLength = 50)
+    @Schema(description = "Unique category code", example = "ELEC", requiredMode = Schema.RequiredMode.REQUIRED, maxLength = 50)
     @NotBlank(message = "Category code is required")
     @Size(max = 50, message = "Category code must not exceed 50 characters")
     @Column(nullable = false, unique = true, length = 50)
@@ -58,7 +71,7 @@ public class Category extends AuditableEntity {
     @Builder.Default
     private Set<Category> childCategories = new HashSet<>();
 
-    @Schema(description = "Tree depth level (0 for root categories)", example = "0", required = true)
+    @Schema(description = "Tree depth level (0 for root categories)", example = "0", requiredMode = Schema.RequiredMode.REQUIRED)
     @Column(nullable = false)
     @Builder.Default
     private Integer level = 0;

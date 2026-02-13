@@ -1,19 +1,35 @@
 package com.moeware.ims.entity.inventory;
 
-import jakarta.persistence.*;
-import jakarta.validation.constraints.*;
-import lombok.*;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
-import io.swagger.v3.oas.annotations.media.Schema;
-
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
 
 import com.moeware.ims.entity.VersionedEntity;
+
+import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.Table;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Entity
 @Table(name = "products", indexes = {
@@ -36,13 +52,13 @@ public class Product extends VersionedEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Schema(description = "Stock Keeping Unit - unique product identifier", example = "LAP-001", required = true, maxLength = 100)
+    @Schema(description = "Stock Keeping Unit - unique product identifier", example = "LAP-001", requiredMode = Schema.RequiredMode.REQUIRED, maxLength = 100)
     @NotBlank(message = "SKU is required")
     @Size(max = 100, message = "SKU must not exceed 100 characters")
     @Column(nullable = false, unique = true, length = 100)
     private String sku;
 
-    @Schema(description = "Product name", example = "Dell Laptop XPS 15", required = true, maxLength = 255)
+    @Schema(description = "Product name", example = "Dell Laptop XPS 15", requiredMode = Schema.RequiredMode.REQUIRED, maxLength = 255)
     @NotBlank(message = "Product name is required")
     @Size(max = 255, message = "Product name must not exceed 255 characters")
     @Column(nullable = false, length = 255)
@@ -52,39 +68,39 @@ public class Product extends VersionedEntity {
     @Column(columnDefinition = "TEXT")
     private String description;
 
-    @Schema(description = "Product category", implementation = Category.class, required = true)
+    @Schema(description = "Product category", implementation = Category.class, requiredMode = Schema.RequiredMode.REQUIRED)
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "category_id", nullable = false)
     @NotNull(message = "Category is required")
     private Category category;
 
-    @Schema(description = "Unit of measure", example = "PIECE", required = true, maxLength = 20, allowableValues = {
+    @Schema(description = "Unit of measure", example = "PIECE", requiredMode = Schema.RequiredMode.REQUIRED, maxLength = 20, allowableValues = {
             "PIECE", "KG", "LITER", "BOX", "PACK" })
     @NotBlank(message = "Unit is required")
     @Size(max = 20, message = "Unit must not exceed 20 characters")
     @Column(nullable = false, length = 20)
     private String unit; // PIECE, KG, LITER, etc.
 
-    @Schema(description = "Selling price per unit", example = "1299.99", required = true, minimum = "0.01")
+    @Schema(description = "Selling price per unit", example = "1299.99", requiredMode = Schema.RequiredMode.REQUIRED, minimum = "0.01")
     @NotNull(message = "Unit price is required")
     @DecimalMin(value = "0.0", inclusive = false, message = "Unit price must be greater than 0")
     @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal unitPrice;
 
-    @Schema(description = "Cost/purchase price per unit", example = "899.00", required = true, minimum = "0.01")
+    @Schema(description = "Cost/purchase price per unit", example = "899.00", requiredMode = Schema.RequiredMode.REQUIRED, minimum = "0.01")
     @NotNull(message = "Cost price is required")
     @DecimalMin(value = "0.0", inclusive = false, message = "Cost price must be greater than 0")
     @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal costPrice;
 
-    @Schema(description = "Stock level threshold for reorder alerts", example = "10", required = true, minimum = "0")
+    @Schema(description = "Stock level threshold for reorder alerts", example = "10", requiredMode = Schema.RequiredMode.REQUIRED, minimum = "0")
     @NotNull(message = "Reorder level is required")
     @Min(value = 0, message = "Reorder level must be non-negative")
     @Column(nullable = false)
     @Builder.Default
     private Integer reorderLevel = 10;
 
-    @Schema(description = "Minimum stock level before critical alert", example = "5", required = true, minimum = "0")
+    @Schema(description = "Minimum stock level before critical alert", example = "5", requiredMode = Schema.RequiredMode.REQUIRED, minimum = "0")
     @NotNull(message = "Minimum stock level is required")
     @Min(value = 0, message = "Minimum stock level must be non-negative")
     @Column(nullable = false)
@@ -101,7 +117,7 @@ public class Product extends VersionedEntity {
     @Column(length = 500)
     private String imageUrl;
 
-    @Schema(description = "Whether the product is active in the catalog", example = "true", required = true)
+    @Schema(description = "Whether the product is active in the catalog", example = "true", requiredMode = Schema.RequiredMode.REQUIRED)
     @Column(nullable = false)
     @Builder.Default
     private Boolean isActive = true;

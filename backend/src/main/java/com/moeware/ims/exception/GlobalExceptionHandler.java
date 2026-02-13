@@ -1,6 +1,9 @@
 package com.moeware.ims.exception;
 
-import lombok.extern.slf4j.Slf4j;
+import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.Map;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -15,10 +18,7 @@ import com.moeware.ims.exception.auth.InvalidTokenException;
 import com.moeware.ims.exception.user.UserAlreadyExistsException;
 
 import io.swagger.v3.oas.annotations.media.Schema;
-
-import java.time.LocalDateTime;
-import java.util.HashMap;
-import java.util.Map;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Global exception handler for the application
@@ -83,7 +83,7 @@ public class GlobalExceptionHandler {
         Map<String, String> errors = new HashMap<>();
         ex.getBindingResult().getAllErrors().forEach((error) -> {
             String errorMessage = error.getDefaultMessage();
-            if(error instanceof FieldError) {
+            if (error instanceof FieldError) {
                 FieldError fieldError = (FieldError) error;
                 errors.put(fieldError.getField(), errorMessage);
             } else {

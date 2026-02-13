@@ -1,21 +1,36 @@
-package com.moeware.ims.entity.customer;
+package com.moeware.ims.entity.staff;
 
-import jakarta.persistence.*;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.HashSet;
+import java.util.Set;
+
+import com.moeware.ims.entity.User;
+import com.moeware.ims.entity.VersionedEntity;
+
+import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.OneToOne;
+import jakarta.persistence.Table;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
-import lombok.*;
-import io.swagger.v3.oas.annotations.media.Schema;
-
-import com.moeware.ims.entity.VersionedEntity;
-import com.moeware.ims.entity.User;
-
-import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.util.HashSet;
-import java.util.Set;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Entity
 @Table(name = "employees", indexes = {
@@ -40,25 +55,25 @@ public class Employee extends VersionedEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Schema(description = "Unique employee code", example = "EMP-001", required = true, maxLength = 50)
+    @Schema(description = "Unique employee code", example = "EMP-001", requiredMode = Schema.RequiredMode.REQUIRED, maxLength = 50)
     @NotBlank(message = "Employee code is required")
     @Size(max = 50, message = "Employee code must not exceed 50 characters")
     @Column(name = "employee_code", nullable = false, unique = true, length = 50)
     private String employeeCode;
 
-    @Schema(description = "Employee first name", example = "John", required = true, maxLength = 100)
+    @Schema(description = "Employee first name", example = "John", requiredMode = Schema.RequiredMode.REQUIRED, maxLength = 100)
     @NotBlank(message = "First name is required")
     @Size(max = 100, message = "First name must not exceed 100 characters")
     @Column(name = "first_name", nullable = false, length = 100)
     private String firstName;
 
-    @Schema(description = "Employee last name", example = "Doe", required = true, maxLength = 100)
+    @Schema(description = "Employee last name", example = "Doe", requiredMode = Schema.RequiredMode.REQUIRED, maxLength = 100)
     @NotBlank(message = "Last name is required")
     @Size(max = 100, message = "Last name must not exceed 100 characters")
     @Column(name = "last_name", nullable = false, length = 100)
     private String lastName;
 
-    @Schema(description = "Work email address", example = "john.doe@company.com", required = true, maxLength = 255, format = "email")
+    @Schema(description = "Work email address", example = "john.doe@company.com", requiredMode = Schema.RequiredMode.REQUIRED, maxLength = 255, format = "email")
     @NotBlank(message = "Email is required")
     @Email(message = "Invalid email format")
     @Size(max = 255, message = "Email must not exceed 255 characters")
@@ -90,7 +105,7 @@ public class Employee extends VersionedEntity {
     @Builder.Default
     private Set<Employee> subordinates = new HashSet<>();
 
-    @Schema(description = "Date of hire", example = "2023-01-15", required = true, format = "date")
+    @Schema(description = "Date of hire", example = "2023-01-15", requiredMode = Schema.RequiredMode.REQUIRED, format = "date")
     @NotNull(message = "Hire date is required")
     @Column(name = "hire_date", nullable = false)
     private LocalDate hireDate;
@@ -108,7 +123,7 @@ public class Employee extends VersionedEntity {
     @JoinColumn(name = "user_id")
     private User user;
 
-    @Schema(description = "Whether the employee is active", example = "true", required = true)
+    @Schema(description = "Whether the employee is active", example = "true", requiredMode = Schema.RequiredMode.REQUIRED)
     @Column(name = "is_active", nullable = false)
     @Builder.Default
     private Boolean isActive = true;

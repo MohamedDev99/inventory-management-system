@@ -1,5 +1,14 @@
 package com.moeware.ims.service;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.moeware.ims.dto.user.UserRegistrationDto;
 import com.moeware.ims.dto.user.UserResponseDto;
 import com.moeware.ims.dto.user.UserUpdateDto;
@@ -9,16 +18,9 @@ import com.moeware.ims.exception.ResourceNotFoundException;
 import com.moeware.ims.exception.user.UserAlreadyExistsException;
 import com.moeware.ims.repository.RoleRepository;
 import com.moeware.ims.repository.UserRepository;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Service for managing users
@@ -95,7 +97,7 @@ public class UserService implements UserDetailsService {
 
     /**
      * Get user passwordhash
-     * 
+     *
      * @param id
      * @return
      */
