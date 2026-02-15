@@ -1,7 +1,8 @@
 -- =========================================
 -- V1: Create Roles and Users Tables
 -- Created: 2026-01-28
--- Description: Initial schema for authentication
+-- Updated: 2026-02-14 (Added version and audit fields)
+-- Description: Initial schema for authentication with optimistic locking
 -- =========================================
 
 -- Create ROLES table
@@ -60,11 +61,14 @@ CREATE TABLE users (
     role_id BIGINT NOT NULL,
     is_active BOOLEAN NOT NULL DEFAULT true,
     last_login TIMESTAMP,
+    version BIGINT NOT NULL DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by VARCHAR(255),
+    updated_by VARCHAR(255),
 
--- Foreign key constraint
-CONSTRAINT fk_users_role FOREIGN KEY (role_id)
+    -- Foreign key constraint
+    CONSTRAINT fk_users_role FOREIGN KEY (role_id)
         REFERENCES roles(id)
         ON DELETE RESTRICT
 );
@@ -106,3 +110,9 @@ COMMENT ON TABLE users IS 'User accounts with authentication details';
 COMMENT ON COLUMN users.password_hash IS 'BCrypt hashed password';
 
 COMMENT ON COLUMN users.is_active IS 'Account active status (soft delete)';
+
+COMMENT ON COLUMN users.version IS 'Optimistic lock version for preventing concurrent update conflicts';
+
+COMMENT ON COLUMN users.created_by IS 'Username of the user who created this record';
+
+COMMENT ON COLUMN users.updated_by IS 'Username of the user who last updated this record';
