@@ -1,16 +1,30 @@
-package com.moeware.ims.entity.customer;
+package com.moeware.ims.entity.staff;
 
-import jakarta.persistence.*;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
-import lombok.*;
-import io.swagger.v3.oas.annotations.media.Schema;
-
-import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
 
 import com.moeware.ims.entity.AuditableEntity;
+
+import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.Table;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Entity
 @Table(name = "departments", indexes = {
@@ -32,13 +46,13 @@ public class Department extends AuditableEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Schema(description = "Unique department code", example = "DEPT-001", required = true, maxLength = 50)
+    @Schema(description = "Unique department code", example = "DEPT-001", requiredMode = Schema.RequiredMode.REQUIRED, maxLength = 50)
     @NotBlank(message = "Department code is required")
     @Size(max = 50, message = "Department code must not exceed 50 characters")
     @Column(name = "department_code", nullable = false, unique = true, length = 50)
     private String departmentCode;
 
-    @Schema(description = "Department name", example = "Warehouse Operations", required = true, maxLength = 100)
+    @Schema(description = "Department name", example = "Warehouse Operations", requiredMode = Schema.RequiredMode.REQUIRED, maxLength = 100)
     @NotBlank(message = "Department name is required")
     @Size(max = 100, message = "Department name must not exceed 100 characters")
     @Column(nullable = false, unique = true, length = 100)
@@ -68,7 +82,7 @@ public class Department extends AuditableEntity {
     @Column(name = "cost_center", length = 50)
     private String costCenter;
 
-    @Schema(description = "Whether the department is active", example = "true", required = true)
+    @Schema(description = "Whether the department is active", example = "true", requiredMode = Schema.RequiredMode.REQUIRED)
     @Column(name = "is_active", nullable = false)
     @Builder.Default
     private Boolean isActive = true;

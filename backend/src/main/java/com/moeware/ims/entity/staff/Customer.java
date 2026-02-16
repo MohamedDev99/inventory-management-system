@@ -1,21 +1,30 @@
-package com.moeware.ims.entity.customer;
-
-import jakarta.persistence.*;
-import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
-import lombok.*;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
-import io.swagger.v3.oas.annotations.media.Schema;
+package com.moeware.ims.entity.staff;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
 
 import com.moeware.ims.entity.VersionedEntity;
 import com.moeware.ims.entity.transaction.SalesOrder;
+
+import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.Table;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Entity
 @Table(name = "customers", indexes = {
@@ -38,7 +47,7 @@ public class Customer extends VersionedEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Schema(description = "Unique customer code", example = "CUST-001", required = true, maxLength = 50)
+    @Schema(description = "Unique customer code", example = "CUST-001", requiredMode = Schema.RequiredMode.REQUIRED, maxLength = 50)
     @NotBlank(message = "Customer code is required")
     @Size(max = 50, message = "Customer code must not exceed 50 characters")
     @Column(name = "customer_code", nullable = false, unique = true, length = 50)
@@ -49,13 +58,13 @@ public class Customer extends VersionedEntity {
     @Column(name = "company_name", length = 255)
     private String companyName;
 
-    @Schema(description = "Primary contact person name", example = "John Doe", required = true, maxLength = 255)
+    @Schema(description = "Primary contact person name", example = "John Doe", requiredMode = Schema.RequiredMode.REQUIRED, maxLength = 255)
     @NotBlank(message = "Contact name is required")
     @Size(max = 255, message = "Contact name must not exceed 255 characters")
     @Column(name = "contact_name", nullable = false, length = 255)
     private String contactName;
 
-    @Schema(description = "Contact email address", example = "john.doe@email.com", required = true, maxLength = 255, format = "email")
+    @Schema(description = "Contact email address", example = "john.doe@email.com", requiredMode = Schema.RequiredMode.REQUIRED, maxLength = 255, format = "email")
     @NotBlank(message = "Email is required")
     @Email(message = "Invalid email format")
     @Size(max = 255, message = "Email must not exceed 255 characters")
@@ -132,7 +141,7 @@ public class Customer extends VersionedEntity {
     @Column(name = "payment_terms", length = 100)
     private String paymentTerms; // Net 30, COD, etc.
 
-    @Schema(description = "Customer type classification", example = "CORPORATE", required = true, maxLength = 20, allowableValues = {
+    @Schema(description = "Customer type classification", example = "CORPORATE", requiredMode = Schema.RequiredMode.REQUIRED, maxLength = 20, allowableValues = {
             "RETAIL", "WHOLESALE", "CORPORATE" })
     @NotBlank(message = "Customer type is required")
     @Size(max = 20, message = "Customer type must not exceed 20 characters")
@@ -144,7 +153,7 @@ public class Customer extends VersionedEntity {
     @Column(name = "tax_id", length = 50)
     private String taxId;
 
-    @Schema(description = "Whether the customer account is active", example = "true", required = true)
+    @Schema(description = "Whether the customer account is active", example = "true", requiredMode = Schema.RequiredMode.REQUIRED)
     @Column(name = "is_active", nullable = false)
     @Builder.Default
     private Boolean isActive = true;

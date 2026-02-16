@@ -1,21 +1,33 @@
-package com.moeware.ims.entity.inventory;
-
-import jakarta.persistence.*;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
-import lombok.*;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
-import io.swagger.v3.oas.annotations.media.Schema;
-
-import com.moeware.ims.entity.VersionedEntity;
-import com.moeware.ims.entity.User;
-import com.moeware.ims.entity.inventory.InventoryItem;
+package com.moeware.ims.entity.staff;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
+
+import com.moeware.ims.entity.User;
+import com.moeware.ims.entity.VersionedEntity;
+import com.moeware.ims.entity.inventory.InventoryItem;
+
+import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.Table;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Entity
 @Table(name = "warehouses", indexes = {
@@ -36,24 +48,24 @@ public class Warehouse extends VersionedEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Schema(description = "Warehouse name", example = "Main Warehouse", required = true, maxLength = 100)
+    @Schema(description = "Warehouse name", example = "Main Warehouse", requiredMode = Schema.RequiredMode.REQUIRED, maxLength = 100)
     @NotBlank(message = "Warehouse name is required")
     @Size(max = 100, message = "Warehouse name must not exceed 100 characters")
     @Column(nullable = false, unique = true, length = 100)
     private String name;
 
-    @Schema(description = "Short warehouse code", example = "WH001", required = true, maxLength = 20)
+    @Schema(description = "Short warehouse code", example = "WH001", requiredMode = Schema.RequiredMode.REQUIRED, maxLength = 20)
     @NotBlank(message = "Warehouse code is required")
     @Size(max = 20, message = "Warehouse code must not exceed 20 characters")
     @Column(nullable = false, unique = true, length = 20)
     private String code;
 
-    @Schema(description = "Street address", example = "123 Storage Street", required = true)
+    @Schema(description = "Street address", example = "123 Storage Street", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotBlank(message = "Address is required")
     @Column(nullable = false, columnDefinition = "TEXT")
     private String address;
 
-    @Schema(description = "City", example = "New York", required = true, maxLength = 100)
+    @Schema(description = "City", example = "New York", requiredMode = Schema.RequiredMode.REQUIRED, maxLength = 100)
     @NotBlank(message = "City is required")
     @Size(max = 100, message = "City must not exceed 100 characters")
     @Column(nullable = false, length = 100)
@@ -64,7 +76,7 @@ public class Warehouse extends VersionedEntity {
     @Column(length = 100)
     private String state;
 
-    @Schema(description = "Country", example = "USA", required = true, maxLength = 100)
+    @Schema(description = "Country", example = "USA", requiredMode = Schema.RequiredMode.REQUIRED, maxLength = 100)
     @NotBlank(message = "Country is required")
     @Size(max = 100, message = "Country must not exceed 100 characters")
     @Column(nullable = false, length = 100)
@@ -84,7 +96,7 @@ public class Warehouse extends VersionedEntity {
     @Column(precision = 12, scale = 2)
     private BigDecimal capacity; // Storage capacity in square feet
 
-    @Schema(description = "Whether the warehouse is operational", example = "true", required = true)
+    @Schema(description = "Whether the warehouse is operational", example = "true", requiredMode = Schema.RequiredMode.REQUIRED)
     @Column(nullable = false)
     @Builder.Default
     private Boolean isActive = true;

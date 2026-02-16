@@ -1,18 +1,38 @@
 package com.moeware.ims.entity.transaction;
 
-import com.moeware.ims.entity.VersionedEntity;
-import com.moeware.ims.entity.User;
-import com.moeware.ims.entity.staff.Warehouse;
-import com.moeware.ims.enums.ShipmentStatus;
-import com.moeware.ims.enums.ShippingMethod;
-
-import jakarta.persistence.*;
-import jakarta.validation.constraints.*;
-import lombok.*;
-import io.swagger.v3.oas.annotations.media.Schema;
-
 import java.math.BigDecimal;
 import java.time.LocalDate;
+
+import com.moeware.ims.entity.User;
+import com.moeware.ims.entity.VersionedEntity;
+import com.moeware.ims.entity.staff.Warehouse;
+import com.moeware.ims.enums.transaction.ShipmentStatus;
+import com.moeware.ims.enums.transaction.ShippingMethod;
+
+import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * Shipment entity

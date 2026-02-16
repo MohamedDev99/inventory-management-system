@@ -1,18 +1,30 @@
 package com.moeware.ims.entity.inventory;
 
-import jakarta.persistence.*;
-import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Size;
-import lombok.*;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
-import io.swagger.v3.oas.annotations.media.Schema;
+import java.time.LocalDateTime;
 
 import com.moeware.ims.entity.VersionedEntity;
 import com.moeware.ims.entity.staff.Warehouse;
 
-import java.time.LocalDateTime;
+import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Entity
 @Table(name = "inventory_items", uniqueConstraints = {
@@ -35,19 +47,19 @@ public class InventoryItem extends VersionedEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Schema(description = "Product being tracked", implementation = Product.class, required = true)
+    @Schema(description = "Product being tracked", implementation = Product.class, requiredMode = Schema.RequiredMode.REQUIRED)
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "product_id", nullable = false)
     @NotNull(message = "Product is required")
     private Product product;
 
-    @Schema(description = "Warehouse where product is stored", implementation = Warehouse.class, required = true)
+    @Schema(description = "Warehouse where product is stored", implementation = Warehouse.class, requiredMode = Schema.RequiredMode.REQUIRED)
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "warehouse_id", nullable = false)
     @NotNull(message = "Warehouse is required")
     private Warehouse warehouse;
 
-    @Schema(description = "Current stock quantity", example = "50", required = true, minimum = "0")
+    @Schema(description = "Current stock quantity", example = "50", requiredMode = Schema.RequiredMode.REQUIRED, minimum = "0")
     @NotNull(message = "Quantity is required")
     @Min(value = 0, message = "Quantity cannot be negative")
     @Column(nullable = false)

@@ -1,19 +1,37 @@
 package com.moeware.ims.entity.transaction;
 
+import java.time.LocalDateTime;
+
+import com.moeware.ims.entity.User;
 import com.moeware.ims.entity.VersionedEntity;
 import com.moeware.ims.entity.inventory.Product;
-import com.moeware.ims.entity.User;
 import com.moeware.ims.entity.staff.Warehouse;
-import com.moeware.ims.enums.AdjustmentReason;
-import com.moeware.ims.enums.AdjustmentType;
-import com.moeware.ims.enums.StockAdjustmentStatus;
+import com.moeware.ims.enums.inventory.AdjustmentReason;
+import com.moeware.ims.enums.inventory.AdjustmentType;
+import com.moeware.ims.enums.inventory.StockAdjustmentStatus;
 
-import jakarta.persistence.*;
-import jakarta.validation.constraints.*;
-import lombok.*;
 import io.swagger.v3.oas.annotations.media.Schema;
-
-import java.time.LocalDateTime;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Table;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotNull;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * Stock Adjustment entity
@@ -97,6 +115,7 @@ public class StockAdjustment extends VersionedEntity {
         @NotNull(message = "Status is required")
         @Enumerated(EnumType.STRING)
         @Column(length = 20, nullable = false)
+        @Builder.Default
         @Schema(description = "Approval status of the adjustment", example = "PENDING", allowableValues = { "PENDING",
                         "APPROVED", "REJECTED" }, defaultValue = "PENDING")
         private StockAdjustmentStatus status = StockAdjustmentStatus.PENDING; // PENDING, APPROVED, REJECTED

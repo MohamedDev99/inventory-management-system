@@ -27,6 +27,7 @@ public class AuthenticationResponse {
     private String refreshToken;
 
     @Schema(description = "Token type (always 'Bearer')", example = "Bearer")
+    @Builder.Default
     private String tokenType = "Bearer";
 
     @Schema(description = "Token expiration time in seconds", example = "86400")
