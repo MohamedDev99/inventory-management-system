@@ -6,9 +6,9 @@ import com.moeware.ims.entity.User;
 import com.moeware.ims.entity.VersionedEntity;
 import com.moeware.ims.entity.inventory.Product;
 import com.moeware.ims.entity.staff.Warehouse;
-import com.moeware.ims.enums.inventory.AdjustmentReason;
-import com.moeware.ims.enums.inventory.AdjustmentType;
-import com.moeware.ims.enums.inventory.StockAdjustmentStatus;
+import com.moeware.ims.enums.transaction.AdjustmentReason;
+import com.moeware.ims.enums.transaction.AdjustmentType;
+import com.moeware.ims.enums.transaction.StockAdjustmentStatus;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.Column;

@@ -1,56 +1,93 @@
 package com.moeware.ims.repository.inventory;
 
-import java.util.List;
-import java.util.Optional;
-
+import com.moeware.ims.entity.inventory.InventoryItem;
+import com.moeware.ims.entity.inventory.Product;
+import com.moeware.ims.entity.staff.Warehouse;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import com.moeware.ims.entity.inventory.InventoryItem;
+import java.util.List;
+import java.util.Optional;
 
+/**
+ * Repository interface for InventoryItem entity
+ * Provides CRUD operations and custom queries for inventory management
+ */
 @Repository
 public interface InventoryItemRepository extends JpaRepository<InventoryItem, Long> {
 
-        Optional<InventoryItem> findByProductIdAndWarehouseId(Long productId, Long warehouseId);
+        /**
+         * Find inventory item by product and warehouse
+         */
+        Optional<InventoryItem> findByProductAndWarehouse(Product product, Warehouse warehouse);
 
-        List<InventoryItem> findByProductId(Long productId);
+        /**
+         * Find all inventory items for a specific warehouse
+         */
+        Page<InventoryItem> findByWarehouse(Warehouse warehouse, Pageable pageable);
 
-        List<InventoryItem> findByWarehouseId(Long warehouseId);
+        /**
+         * Find all inventory items for a specific product across all warehouses
+         */
+        List<InventoryItem> findByProduct(Product product);
 
-        @Query("SELECT i FROM InventoryItem i " +
-                        "LEFT JOIN FETCH i.product p " +
-                        "LEFT JOIN FETCH i.warehouse w " +
-                        "WHERE i.warehouse.id = :warehouseId")
-        List<InventoryItem> findByWarehouseIdWithDetails(@Param("warehouseId") Long warehouseId);
+        /**
+         * Find all low stock items (where quantity <= reorder level)
+         */
+        @Query("SELECT i FROM InventoryItem i WHERE i.quantity <= i.product.reorderLevel")
+        Page<InventoryItem> findLowStockItems(Pageable pageable);
 
-        @Query("SELECT i FROM InventoryItem i " +
-                        "LEFT JOIN FETCH i.product p " +
-                        "WHERE p.id = :productId")
-        List<InventoryItem> findByProductIdWithDetails(@Param("productId") Long productId);
+        /**
+         * Find all low stock items in a specific warehouse
+         */
+        @Query("SELECT i FROM InventoryItem i WHERE i.warehouse = :warehouse AND i.quantity <= i.product.reorderLevel")
+        Page<InventoryItem> findLowStockItemsByWarehouse(@Param("warehouse") Warehouse warehouse, Pageable pageable);
 
-        @Query("SELECT i FROM InventoryItem i " +
-                        "JOIN i.product p " +
-                        "WHERE i.quantity <= p.reorderLevel")
-        List<InventoryItem> findLowStockItems();
+        /**
+         * Search inventory items by product name or SKU
+         */
+        @Query("SELECT i FROM InventoryItem i WHERE " +
+                        "LOWER(i.product.name) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+                        "LOWER(i.product.sku) LIKE LOWER(CONCAT('%', :search, '%'))")
+        Page<InventoryItem> searchInventoryItems(@Param("search") String search, Pageable pageable);
 
-        @Query("SELECT i FROM InventoryItem i " +
-                        "JOIN i.product p " +
-                        "WHERE i.quantity <= p.minStockLevel")
-        List<InventoryItem> findCriticalStockItems();
+        /**
+         * Find all inventory items with filters
+         */
+        @Query("SELECT i FROM InventoryItem i WHERE " +
+                        "(:warehouseId IS NULL OR i.warehouse.id = :warehouseId) AND " +
+                        "(:productId IS NULL OR i.product.id = :productId) AND " +
+                        "(:lowStock = false OR i.quantity <= i.product.reorderLevel)")
+        Page<InventoryItem> findAllWithFilters(
+                        @Param("warehouseId") Long warehouseId,
+                        @Param("productId") Long productId,
+                        @Param("lowStock") Boolean lowStock,
+                        Pageable pageable);
 
-        @Query("SELECT i FROM InventoryItem i " +
-                        "JOIN i.product p " +
-                        "WHERE i.warehouse.id = :warehouseId " +
-                        "AND i.quantity <= p.reorderLevel")
-        List<InventoryItem> findLowStockItemsByWarehouse(@Param("warehouseId") Long warehouseId);
+        /**
+         * Get total inventory count across all warehouses
+         */
+        @Query("SELECT COUNT(i) FROM InventoryItem i")
+        Long countTotalInventoryItems();
 
-        @Query("SELECT SUM(i.quantity) FROM InventoryItem i WHERE i.product.id = :productId")
-        Integer getTotalStockByProduct(@Param("productId") Long productId);
+        /**
+         * Get total inventory value by warehouse
+         */
+        @Query("SELECT SUM(i.quantity * i.product.unitPrice) FROM InventoryItem i WHERE i.warehouse.id = :warehouseId")
+        Double calculateTotalValueByWarehouse(@Param("warehouseId") Long warehouseId);
 
-        @Query("SELECT COUNT(i) FROM InventoryItem i WHERE i.warehouse.id = :warehouseId")
-        Long countByWarehouse(@Param("warehouseId") Long warehouseId);
+        /**
+         * Get total inventory units by warehouse
+         */
+        @Query("SELECT SUM(i.quantity) FROM InventoryItem i WHERE i.warehouse.id = :warehouseId")
+        Long getTotalUnitsByWarehouse(@Param("warehouseId") Long warehouseId);
 
+        /**
+         * Check if product exists in warehouse
+         */
         boolean existsByProductIdAndWarehouseId(Long productId, Long warehouseId);
 }
