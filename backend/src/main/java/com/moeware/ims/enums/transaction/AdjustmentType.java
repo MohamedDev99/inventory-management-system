@@ -1,4 +1,4 @@
-package com.moeware.ims.enums.inventory;
+package com.moeware.ims.enums.transaction;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
