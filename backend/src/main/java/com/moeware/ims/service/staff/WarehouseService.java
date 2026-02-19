@@ -17,6 +17,10 @@ import com.moeware.ims.dto.staff.warehouse.WarehouseStatsResponse;
 import com.moeware.ims.dto.staff.warehouse.WarehouseUpdateRequest;
 import com.moeware.ims.entity.User;
 import com.moeware.ims.entity.staff.Warehouse;
+import com.moeware.ims.exception.staff.warehouse.WarehouseAlreadyExistsException;
+import com.moeware.ims.exception.staff.warehouse.WarehouseHasInventoryException;
+import com.moeware.ims.exception.staff.warehouse.WarehouseNotFoundException;
+import com.moeware.ims.exception.user.ManagerNotFoundException;
 import com.moeware.ims.repository.UserRepository;
 import com.moeware.ims.repository.staff.WarehouseRepository;
 
@@ -49,11 +53,11 @@ public class WarehouseService {
 
         // Validate unique constraints
         if (warehouseRepository.existsByCode(request.getCode())) {
-            throw new IllegalArgumentException("Warehouse with code '" + request.getCode() + "' already exists");
+            throw new WarehouseAlreadyExistsException("code", request.getCode());
         }
 
         if (warehouseRepository.existsByName(request.getName())) {
-            throw new IllegalArgumentException("Warehouse with name '" + request.getName() + "' already exists");
+            throw new WarehouseAlreadyExistsException("name", request.getName());
         }
 
         // Validate manager if provided
@@ -61,7 +65,7 @@ public class WarehouseService {
         if (request.getManagerId() != null) {
             manager = userRepository.findById(request.getManagerId())
                     .orElseThrow(
-                            () -> new EntityNotFoundException("User with ID " + request.getManagerId() + " not found"));
+                            () -> new ManagerNotFoundException(request.getManagerId()));
         }
 
         // Create warehouse entity
@@ -105,7 +109,7 @@ public class WarehouseService {
     public WarehouseResponse getWarehouseByCode(String code) {
         log.debug("Fetching warehouse with code: {}", code);
         Warehouse warehouse = warehouseRepository.findByCode(code)
-                .orElseThrow(() -> new EntityNotFoundException("Warehouse with code '" + code + "' not found"));
+                .orElseThrow(() -> new WarehouseNotFoundException(code));
         return mapToResponse(warehouse);
     }
 
@@ -262,7 +266,7 @@ public class WarehouseService {
             // Check if name is being changed and if new name already exists
             if (!request.getName().equals(warehouse.getName()) &&
                     warehouseRepository.existsByName(request.getName())) {
-                throw new IllegalArgumentException("Warehouse with name '" + request.getName() + "' already exists");
+                throw new WarehouseAlreadyExistsException("name", request.getName());
             }
             warehouse.setName(request.getName());
         }
@@ -284,7 +288,7 @@ public class WarehouseService {
         if (request.getManagerId() != null) {
             User manager = userRepository.findById(request.getManagerId())
                     .orElseThrow(
-                            () -> new EntityNotFoundException("User with ID " + request.getManagerId() + " not found"));
+                            () -> new ManagerNotFoundException(request.getManagerId()));
             warehouse.setManager(manager);
         }
         if (request.getCapacity() != null) {
@@ -329,8 +333,8 @@ public class WarehouseService {
 
         // Check if warehouse has inventory
         if (!warehouse.getInventoryItems().isEmpty()) {
-            throw new IllegalStateException("Cannot delete warehouse with existing inventory. " +
-                    "Please transfer or remove all inventory first.");
+            Integer inventoryCount = warehouse.getInventoryItems().size();
+            throw new WarehouseHasInventoryException(id, inventoryCount);
         }
 
         warehouseRepository.deleteById(id);
@@ -367,7 +371,7 @@ public class WarehouseService {
 
     private Warehouse findWarehouseById(Long id) {
         return warehouseRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Warehouse with ID " + id + " not found"));
+                .orElseThrow(() -> new WarehouseNotFoundException(id));
     }
 
     private WarehouseResponse mapToResponse(Warehouse warehouse) {

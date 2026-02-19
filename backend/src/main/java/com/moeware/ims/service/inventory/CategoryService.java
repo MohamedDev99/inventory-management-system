@@ -16,9 +16,15 @@ import com.moeware.ims.dto.inventory.category.CategoryResponse;
 import com.moeware.ims.dto.inventory.category.CategoryTreeNode;
 import com.moeware.ims.dto.inventory.category.CategoryUpdateRequest;
 import com.moeware.ims.entity.inventory.Category;
+import com.moeware.ims.exception.InvalidOperationException;
+import com.moeware.ims.exception.inventory.category.CategoryAlreadyExistsException;
+import com.moeware.ims.exception.inventory.category.CategoryHasChildrenException;
+import com.moeware.ims.exception.inventory.category.CategoryHasProductsException;
+import com.moeware.ims.exception.inventory.category.CategoryNotFoundException;
+import com.moeware.ims.exception.inventory.category.CircularCategoryReferenceException;
+import com.moeware.ims.exception.inventory.category.ParentCategoryNotFoundException;
 import com.moeware.ims.repository.inventory.CategoryRepository;
 
-import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -47,11 +53,11 @@ public class CategoryService {
 
         // Validate unique constraints
         if (categoryRepository.existsByCode(request.getCode())) {
-            throw new IllegalArgumentException("Category with code '" + request.getCode() + "' already exists");
+            throw new CategoryAlreadyExistsException("code", request.getCode());
         }
 
         if (categoryRepository.existsByName(request.getName())) {
-            throw new IllegalArgumentException("Category with name '" + request.getName() + "' already exists");
+            throw new CategoryAlreadyExistsException("name", request.getName());
         }
 
         // Validate and set parent category if provided
@@ -60,8 +66,7 @@ public class CategoryService {
 
         if (request.getParentCategoryId() != null) {
             parentCategory = categoryRepository.findById(request.getParentCategoryId())
-                    .orElseThrow(() -> new EntityNotFoundException("Parent category with ID " +
-                            request.getParentCategoryId() + " not found"));
+                    .orElseThrow(() -> new ParentCategoryNotFoundException(request.getParentCategoryId()));
             level = parentCategory.getLevel() + 1;
         }
 
@@ -101,7 +106,7 @@ public class CategoryService {
     public CategoryResponse getCategoryByCode(String code) {
         log.debug("Fetching category with code: {}", code);
         Category category = categoryRepository.findByCode(code)
-                .orElseThrow(() -> new EntityNotFoundException("Category with code '" + code + "' not found"));
+                .orElseThrow(() -> new CategoryNotFoundException(code));
         return mapToResponse(category);
     }
 
@@ -173,7 +178,7 @@ public class CategoryService {
 
         // Validate parent exists
         if (!categoryRepository.existsById(parentId)) {
-            throw new EntityNotFoundException("Category with ID " + parentId + " not found");
+            throw new CategoryAlreadyExistsException(parentId);
         }
 
         Page<Category> categories = categoryRepository.findByParentCategoryId(parentId, pageable);
@@ -218,7 +223,7 @@ public class CategoryService {
         log.debug("Counting products in category tree for ID: {}", categoryId);
 
         if (!categoryRepository.existsById(categoryId)) {
-            throw new EntityNotFoundException("Category with ID " + categoryId + " not found");
+            throw new CategoryAlreadyExistsException(categoryId);
         }
 
         return categoryRepository.countProductsInCategoryTree(categoryId);
@@ -242,7 +247,7 @@ public class CategoryService {
             // Check if name is being changed and if new name already exists
             if (!request.getName().equals(category.getName()) &&
                     categoryRepository.existsByName(request.getName())) {
-                throw new IllegalArgumentException("Category with name '" + request.getName() + "' already exists");
+                throw new CategoryAlreadyExistsException("name", request.getName());
             }
             category.setName(request.getName());
         }
@@ -254,18 +259,16 @@ public class CategoryService {
         if (request.getParentCategoryId() != null) {
             // Prevent setting itself as parent
             if (request.getParentCategoryId().equals(id)) {
-                throw new IllegalArgumentException("Category cannot be its own parent");
+                throw new InvalidOperationException("Cannot set category as its own parent");
             }
 
             // Get new parent category
             Category newParent = categoryRepository.findById(request.getParentCategoryId())
-                    .orElseThrow(() -> new EntityNotFoundException("Parent category with ID " +
-                            request.getParentCategoryId() + " not found"));
+                    .orElseThrow(() -> new ParentCategoryNotFoundException(request.getParentCategoryId()));
 
             // Prevent circular references (check if new parent is a descendant)
             if (isDescendant(category, newParent)) {
-                throw new IllegalArgumentException(
-                        "Cannot set a descendant category as parent - would create circular reference");
+                throw new CircularCategoryReferenceException(category.getId(), newParent.getId());
             }
 
             category.setParentCategory(newParent);
@@ -295,14 +298,12 @@ public class CategoryService {
         // Check if category has products
         long productCount = categoryRepository.countProductsInCategory(id);
         if (productCount > 0) {
-            throw new IllegalStateException("Cannot delete category with existing products. " +
-                    "Please reassign or remove all products first.");
+            throw new CategoryHasProductsException(id, productCount);
         }
 
         // Check if category has child categories
         if (categoryRepository.hasChildCategories(id)) {
-            throw new IllegalStateException("Cannot delete category with child categories. " +
-                    "Please delete or reassign child categories first.");
+            throw new CategoryHasChildrenException(id);
         }
 
         categoryRepository.deleteById(id);
@@ -342,7 +343,7 @@ public class CategoryService {
 
     private Category findCategoryById(Long id) {
         return categoryRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Category with ID " + id + " not found"));
+                .orElseThrow(() -> new CategoryNotFoundException(id));
     }
 
     private List<CategoryTreeNode> buildTree(List<Category> categories) {
