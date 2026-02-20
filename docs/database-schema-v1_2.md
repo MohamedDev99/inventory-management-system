@@ -164,12 +164,14 @@ INSERT INTO roles (id, name, description) VALUES
 | username      | VARCHAR(50)  | NOT NULL, UNIQUE            | Login username         |
 | email         | VARCHAR(255) | NOT NULL, UNIQUE            | User email address     |
 | password_hash | VARCHAR(255) | NOT NULL                    | BCrypt hashed password |
-| role_id       | BIGINT       | NOT NULL, FK â†’ roles(id)    | User's role            |
+| role_id       | BIGINT       | NOT NULL, FK â†’ roles(id)  | User's role            |
 | is_active     | BOOLEAN      | NOT NULL, DEFAULT true      | Account status         |
 | last_login    | TIMESTAMP    | -                           | Last login timestamp   |
-| version       | BIGINT       | NOT NULL, DEFAULT 0         | Optimistic lock version   |
+| version       | BIGINT       | NOT NULL, DEFAULT 0         | Optimistic lock version|
 | created_at    | TIMESTAMP    | NOT NULL, DEFAULT NOW()     | Account creation       |
 | updated_at    | TIMESTAMP    | NOT NULL, DEFAULT NOW()     | Last update            |
+| created_by    | VARCHAR(255) | NOT NULL,                   | username of user       |
+| updated_by    | VARCHAR(255) | NOT NULL,                   | username of user       |
 
 **Foreign Keys:**
 
@@ -214,6 +216,8 @@ INSERT INTO users (username, email, password_hash, role_id) VALUES
 | version       | BIGINT       | NOT NULL, DEFAULT 0         | Optimistic lock version   |
 | created_at  | TIMESTAMP     | NOT NULL, DEFAULT NOW()     | Creation timestamp       |
 | updated_at  | TIMESTAMP     | NOT NULL, DEFAULT NOW()     | Last update              |
+| created_by    | VARCHAR(255) | NOT NULL,                   | username of user       |
+| updated_by    | VARCHAR(255) | NOT NULL,                   | username of user       |
 
 **Foreign Keys:**
 
@@ -294,9 +298,11 @@ INSERT INTO categories (name, code, parent_category_id, level) VALUES
 | barcode         | VARCHAR(50)   | UNIQUE                        | Product barcode                    |
 | image_url       | VARCHAR(500)  | -                             | Product image URL                  |
 | is_active       | BOOLEAN       | NOT NULL, DEFAULT true        | Product status                     |
-| version       | BIGINT       | NOT NULL, DEFAULT 0         | Optimistic lock version   |
+| version         | BIGINT        | NOT NULL, DEFAULT 0           | Optimistic lock version            |
 | created_at      | TIMESTAMP     | NOT NULL, DEFAULT NOW()       | Creation timestamp                 |
 | updated_at      | TIMESTAMP     | NOT NULL, DEFAULT NOW()       | Last update                        |
+| created_by      | VARCHAR(255)  | NOT NULL,                     | username of user                |
+| updated_by      | VARCHAR(255)  | NOT NULL,                     | username of user                |
 
 **Foreign Keys:**
 
@@ -337,6 +343,8 @@ INSERT INTO products (sku, name, category_id, unit, unit_price, cost_price, reor
 | version       | BIGINT       | NOT NULL, DEFAULT 0         | Optimistic lock version   |
 | created_at       | TIMESTAMP   | NOT NULL, DEFAULT NOW()                    | Creation timestamp                 |
 | updated_at       | TIMESTAMP   | NOT NULL, DEFAULT NOW()                    | Last update                        |
+| created_by       | VARCHAR(255)| NOT NULL,                                  | username of user       |
+| updated_by       | VARCHAR(255)| NOT NULL,                                  | username of user       |
 
 **Foreign Keys:**
 
@@ -386,6 +394,8 @@ INSERT INTO inventory_items (product_id, warehouse_id, quantity, location_code) 
 | is_active      | BOOLEAN      | NOT NULL, DEFAULT true              | Supplier status              |
 | created_at     | TIMESTAMP    | NOT NULL, DEFAULT NOW()             | Creation timestamp           |
 | updated_at     | TIMESTAMP    | NOT NULL, DEFAULT NOW()             | Last update                  |
+| created_by     | VARCHAR(255) | NOT NULL,                           | username of user       |
+| updated_by     | VARCHAR(255) | NOT NULL,                           | username of user       |
 
 **Indexes:**
 
@@ -425,9 +435,11 @@ INSERT INTO suppliers (name, code, email, payment_terms, rating) VALUES
 | discount_amount        | DECIMAL(12,2) | NOT NULL, DEFAULT 0           | Discount amount              |
 | total_amount           | DECIMAL(12,2) | NOT NULL, DEFAULT 0           | Total amount                 |
 | notes                  | TEXT          | -                             | Order notes                  |
-| version       | BIGINT       | NOT NULL, DEFAULT 0         | Optimistic lock version   |
+| version                | BIGINT       | NOT NULL, DEFAULT 0         | Optimistic lock version   |
 | created_at             | TIMESTAMP     | NOT NULL, DEFAULT NOW()       | Creation timestamp           |
 | updated_at             | TIMESTAMP     | NOT NULL, DEFAULT NOW()       | Last update                  |
+| created_by             | VARCHAR(255)  | NOT NULL,                     | username of user       |
+| updated_by             | VARCHAR(255)  | NOT NULL,                     | username of user       |
 
 **Foreign Keys:**
 
@@ -476,6 +488,8 @@ INSERT INTO purchase_orders (po_number, supplier_id, warehouse_id, created_by, s
 | version       | BIGINT       | NOT NULL, DEFAULT 0         | Optimistic lock version   |
 | created_at        | TIMESTAMP     | NOT NULL, DEFAULT NOW()                             | Creation timestamp        |
 | updated_at        | TIMESTAMP     | NOT NULL, DEFAULT NOW()                             | Last update               |
+| created_by    | VARCHAR(255) | NOT NULL,                   | username of user       |
+| updated_by    | VARCHAR(255) | NOT NULL,                   | username of user       |
 
 **Foreign Keys:**
 
@@ -529,6 +543,8 @@ INSERT INTO purchase_order_items (purchase_order_id, product_id, quantity_ordere
 | version       | BIGINT       | NOT NULL, DEFAULT 0         | Optimistic lock version   |
 | created_at       | TIMESTAMP     | NOT NULL, DEFAULT NOW()       | Creation timestamp           |
 | updated_at       | TIMESTAMP     | NOT NULL, DEFAULT NOW()       | Last update                  |
+| created_by    | VARCHAR(255) | NOT NULL,                   | username of user       |
+| updated_by    | VARCHAR(255) | NOT NULL,                   | username of user       |
 
 **Foreign Keys:**
 
@@ -584,6 +600,8 @@ INSERT INTO sales_orders (so_number, customer_id, customer_name, customer_email,
 | version       | BIGINT       | NOT NULL, DEFAULT 0         | Optimistic lock version   |
 | created_at     | TIMESTAMP     | NOT NULL, DEFAULT NOW()         | Creation timestamp        |
 | updated_at     | TIMESTAMP     | NOT NULL, DEFAULT NOW()         | Last update               |
+| created_by    | VARCHAR(255) | NOT NULL,                   | username of user       |
+| updated_by    | VARCHAR(255) | NOT NULL,                   | username of user       |
 
 **Foreign Keys:**
 
@@ -624,6 +642,9 @@ INSERT INTO sales_order_items (sales_order_id, product_id, quantity, unit_price,
 | movement_date     | TIMESTAMP   | NOT NULL                       | Movement timestamp                         |
 | version       | BIGINT       | NOT NULL, DEFAULT 0         | Optimistic lock version   |
 | created_at        | TIMESTAMP   | NOT NULL, DEFAULT NOW()        | Record creation                            |
+| updated_at        | TIMESTAMP   | NOT NULL, DEFAULT NOW()        | Last update                                |
+| created_by    | VARCHAR(255) | NOT NULL,                   | username of user       |
+| updated_by    | VARCHAR(255) | NOT NULL,                   | username of user       |
 
 **Foreign Keys:**
 
@@ -682,6 +703,8 @@ INSERT INTO inventory_movements (product_id, from_warehouse_id, to_warehouse_id,
 | version       | BIGINT       | NOT NULL, DEFAULT 0         | Optimistic lock version   |
 | created_at      | TIMESTAMP    | NOT NULL, DEFAULT NOW()       | Record creation             |
 | updated_at      | TIMESTAMP    | NOT NULL, DEFAULT NOW()       | Last update                 |
+| created_by    | VARCHAR(255) | NOT NULL,                   | username of user       |
+| updated_by    | VARCHAR(255) | NOT NULL,                   | username of user       |
 
 **Foreign Keys:**
 
@@ -732,6 +755,7 @@ INSERT INTO stock_adjustments (product_id, warehouse_id, quantity_before, quanti
 | ip_address   | VARCHAR(45) | -                           | User IP address                          |
 | user_agent   | TEXT        | -                           | Browser user agent                       |
 | created_at   | TIMESTAMP   | NOT NULL, DEFAULT NOW()     | Action timestamp                         |
+| created_by    | VARCHAR(255) | NOT NULL,                   | username of user       |
 
 **Foreign Keys:**
 
@@ -776,6 +800,7 @@ INSERT INTO audit_logs (entity_type, entity_id, action, new_values, performed_by
 | reference_type    | VARCHAR(50)  | -                           | Related entity type  |
 | reference_id      | BIGINT       | -                           | Related entity ID    |
 | created_at        | TIMESTAMP    | NOT NULL, DEFAULT NOW()     | Creation timestamp   |
+| created_by        | VARCHAR(255) | NOT NULL,                   | username of user       |
 | read_at           | TIMESTAMP    | -                           | Read timestamp       |
 
 **Foreign Keys:**
@@ -820,6 +845,7 @@ INSERT INTO notifications (user_id, notification_type, title, message, priority)
 | status       | VARCHAR(20)  | NOT NULL, DEFAULT 'PENDING' | Generation status          |
 | generated_at | TIMESTAMP    | -                           | Generation completion time |
 | created_at   | TIMESTAMP    | NOT NULL, DEFAULT NOW()     | Request timestamp          |
+| created_by   | VARCHAR(255) | NOT NULL,                   | username of user           |
 
 **Foreign Keys:**
 
@@ -878,6 +904,8 @@ INSERT INTO reports (report_type, name, generated_by, status) VALUES
 | version       | BIGINT       | NOT NULL, DEFAULT 0         | Optimistic lock version   |
 | created_at           | TIMESTAMP     | NOT NULL, DEFAULT NOW()     | Creation timestamp           |
 | updated_at           | TIMESTAMP     | NOT NULL, DEFAULT NOW()     | Last update                  |
+| created_by    | VARCHAR(255) | NOT NULL,                   | username of user       |
+| updated_by    | VARCHAR(255) | NOT NULL,                   | username of user       |
 
 **Check Constraints:**
 
@@ -919,6 +947,8 @@ INSERT INTO customers (customer_code, contact_name, email, phone, customer_type,
 | is_active            | BOOLEAN      | NOT NULL, DEFAULT true      | Department status      |
 | created_at           | TIMESTAMP    | NOT NULL, DEFAULT NOW()     | Creation timestamp     |
 | updated_at           | TIMESTAMP    | NOT NULL, DEFAULT NOW()     | Last update            |
+| created_by    | VARCHAR(255) | NOT NULL,                   | username of user       |
+| updated_by    | VARCHAR(255) | NOT NULL,                   | username of user       |
 
 **Foreign Keys:**
 
@@ -968,6 +998,8 @@ INSERT INTO departments (department_code, name, description) VALUES
 | version       | BIGINT       | NOT NULL, DEFAULT 0         | Optimistic lock version   |
 | created_at       | TIMESTAMP     | NOT NULL, DEFAULT NOW()     | Creation timestamp  |
 | updated_at       | TIMESTAMP     | NOT NULL, DEFAULT NOW()     | Last update         |
+| created_by    | VARCHAR(255) | NOT NULL,                   | username of user       |
+| updated_by    | VARCHAR(255) | NOT NULL,                   | username of user       |
 
 **Foreign Keys:**
 
@@ -1020,6 +1052,8 @@ INSERT INTO employees (employee_code, first_name, last_name, email, job_title, h
 | version       | BIGINT       | NOT NULL, DEFAULT 0         | Optimistic lock version   |
 | created_at                | TIMESTAMP     | NOT NULL, DEFAULT NOW()         | Creation timestamp            |
 | updated_at                | TIMESTAMP     | NOT NULL, DEFAULT NOW()         | Last update                   |
+| created_by    | VARCHAR(255) | NOT NULL,                   | username of user       |
+| updated_by    | VARCHAR(255) | NOT NULL,                   | username of user       |
 
 **Foreign Keys:**
 
@@ -1072,6 +1106,8 @@ INSERT INTO shipments (shipment_number, sales_order_id, carrier, tracking_number
 | version       | BIGINT       | NOT NULL, DEFAULT 0         | Optimistic lock version   |
 | created_at       | TIMESTAMP     | NOT NULL, DEFAULT NOW()      | Creation timestamp       |
 | updated_at       | TIMESTAMP     | NOT NULL, DEFAULT NOW()      | Last update              |
+| created_by    | VARCHAR(255) | NOT NULL,                   | username of user       |
+| updated_by    | VARCHAR(255) | NOT NULL,                   | username of user       |
 
 **Foreign Keys:**
 
@@ -1130,6 +1166,8 @@ INSERT INTO payments (payment_number, sales_order_id, customer_id, payment_date,
 | version       | BIGINT       | NOT NULL, DEFAULT 0         | Optimistic lock version   |
 | created_at      | TIMESTAMP     | NOT NULL, DEFAULT NOW()         | Creation timestamp    |
 | updated_at      | TIMESTAMP     | NOT NULL, DEFAULT NOW()         | Last update           |
+| created_by    | VARCHAR(255) | NOT NULL,                   | username of user       |
+| updated_by    | VARCHAR(255) | NOT NULL,                   | username of user       |
 
 **Foreign Keys:**
 
@@ -2255,7 +2293,7 @@ _End of Database Schema Documentation_
 
 ## Optimistic Locking Strategy
 
-**Version:** 1.1.0  
+**Version:** 1.1.0
 **Added:** January 2026
 
 ### Purpose
@@ -2280,7 +2318,7 @@ version BIGINT NOT NULL DEFAULT 0
 
 2. **Update Attempt:** Application modifies data and attempts update with version check
    ```sql
-   UPDATE products 
+   UPDATE products
    SET name = 'Gaming Laptop', quantity = 45, version = version + 1
    WHERE id = 123 AND version = 5;
    ```
@@ -2301,13 +2339,13 @@ public class Product {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    
+
     private String name;
     private Integer quantity;
-    
+
     @Version  // JPA handles this automatically
     private Long version;
-    
+
     // getters, setters...
 }
 ```
@@ -2366,7 +2404,7 @@ try {
    // ✅ CORRECT
    @Query("UPDATE Product p SET p.quantity = :quantity WHERE p.id = :id AND p.version = :version")
    int updateQuantity(@Param("id") Long id, @Param("quantity") Integer quantity, @Param("version") Long version);
-   
+
    // ❌ WRONG - Bypasses optimistic locking
    @Query("UPDATE Product p SET p.quantity = :quantity WHERE p.id = :id")
    int updateQuantity(@Param("id") Long id, @Param("quantity") Integer quantity);
@@ -2378,15 +2416,15 @@ try {
    public void updateInventory(Long productId, Integer newQuantity) {
        int maxRetries = 3;
        int attempt = 0;
-       
+
        while (attempt < maxRetries) {
            try {
                Product product = productRepository.findById(productId)
                    .orElseThrow(() -> new NotFoundException("Product not found"));
-               
+
                product.setQuantity(newQuantity);
                productRepository.save(product);
-               
+
                return; // Success
            } catch (OptimisticLockException e) {
                attempt++;
@@ -2418,7 +2456,7 @@ try {
 4. **Log Conflicts for Monitoring**
    ```java
    // Add metrics to track conflict frequency
-   meterRegistry.counter("database.optimistic_lock_failures", 
+   meterRegistry.counter("database.optimistic_lock_failures",
        "entity", entity.getClass().getSimpleName()
    ).increment();
    ```
@@ -2488,13 +2526,13 @@ Always test concurrent scenarios:
 public void testConcurrentInventoryUpdate() throws Exception {
     // Given: Product with quantity 100
     Product product = createProduct(100);
-    
+
     // When: Two threads try to update simultaneously
     ExecutorService executor = Executors.newFixedThreadPool(2);
-    
+
     CountDownLatch latch = new CountDownLatch(2);
     AtomicInteger conflicts = new AtomicInteger(0);
-    
+
     Runnable task = () -> {
         try {
             inventoryService.reduceQuantity(product.getId(), 10);
@@ -2504,15 +2542,15 @@ public void testConcurrentInventoryUpdate() throws Exception {
             latch.countDown();
         }
     };
-    
+
     executor.submit(task);
     executor.submit(task);
-    
+
     latch.await();
-    
+
     // Then: One succeeds, one conflicts
     assertEquals(1, conflicts.get());
-    
+
     // Final quantity should be 90 (only one update succeeded)
     Product updated = productRepository.findById(product.getId()).get();
     assertEquals(90, updated.getQuantity());
@@ -2521,8 +2559,8 @@ public void testConcurrentInventoryUpdate() throws Exception {
 
 ---
 
-**Document Owner:** Database Team  
-**Last Updated:** January 2026  
+**Document Owner:** Database Team
+**Last Updated:** January 2026
 **Next Review:** February 2026
 
 _End of Optimistic Locking Strategy_
