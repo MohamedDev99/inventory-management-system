@@ -12,47 +12,44 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.moeware.ims.dto.transaction.CancelOrderRequest;
-import com.moeware.ims.dto.transaction.purchaseOrder.PurchaseOrderItemRequest;
-import com.moeware.ims.dto.transaction.purchaseOrder.PurchaseOrderItemResponse;
-import com.moeware.ims.dto.transaction.purchaseOrder.PurchaseOrderRequest;
-import com.moeware.ims.dto.transaction.purchaseOrder.PurchaseOrderResponse;
-import com.moeware.ims.dto.transaction.purchaseOrder.PurchaseOrderSummaryResponse;
-import com.moeware.ims.dto.transaction.purchaseOrder.ReceivePurchaseOrderRequest;
-import com.moeware.ims.entity.inventory.Product;
-import com.moeware.ims.entity.inventory.Supplier;
-import com.moeware.ims.entity.staff.Warehouse;
-import com.moeware.ims.entity.transaction.PurchaseOrder;
-import com.moeware.ims.entity.transaction.PurchaseOrderItem;
+import com.moeware.ims.dto.transaction.salesOrder.SalesOrderItemRequest;
+import com.moeware.ims.dto.transaction.salesOrder.SalesOrderItemResponse;
+import com.moeware.ims.dto.transaction.salesOrder.SalesOrderRequest;
+import com.moeware.ims.dto.transaction.salesOrder.SalesOrderResponse;
+import com.moeware.ims.dto.transaction.salesOrder.SalesOrderSummaryResponse;
 import com.moeware.ims.entity.User;
-import com.moeware.ims.enums.transaction.PurchaseOrderStatus;
+import com.moeware.ims.entity.inventory.Product;
+import com.moeware.ims.entity.staff.Customer;
+import com.moeware.ims.entity.staff.Warehouse;
+import com.moeware.ims.entity.transaction.SalesOrder;
+import com.moeware.ims.entity.transaction.SalesOrderItem;
+import com.moeware.ims.enums.transaction.SalesOrderStatus;
 import com.moeware.ims.exception.ResourceNotFoundException;
 import com.moeware.ims.exception.transaction.InvalidOrderStatusTransitionException;
 import com.moeware.ims.exception.transaction.OrderNotEditableException;
-import com.moeware.ims.exception.transaction.purchaseOrder.PurchaseOrderNotFoundException;
-import com.moeware.ims.repository.transaction.PurchaseOrderItemRepository;
-import com.moeware.ims.repository.transaction.PurchaseOrderRepository;
+import com.moeware.ims.exception.transaction.salesOrder.SalesOrderNotFoundException;
+import com.moeware.ims.repository.transaction.SalesOrderRepository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Service for purchase order business logic and workflow management
+ * Service for sales order business logic and workflow management
  *
- * Workflow: DRAFT -> SUBMITTED -> APPROVED -> RECEIVED
- *           Any status -> CANCELLED (except RECEIVED)
+ * Workflow: PENDING -> CONFIRMED -> FULFILLED -> SHIPPED -> DELIVERED
+ * Any status (before SHIPPED) -> CANCELLED
  */
 @Service
 @RequiredArgsConstructor
 @Slf4j
 @Transactional(readOnly = true)
-public class PurchaseOrderService {
+public class SalesOrderService {
 
-    private final PurchaseOrderRepository purchaseOrderRepository;
-    private final PurchaseOrderItemRepository purchaseOrderItemRepository;
+    private final SalesOrderRepository salesOrderRepository;
 
     // These repositories are assumed to exist from previous sprints
     // Adjust package paths to match your project structure
-    private final com.moeware.ims.repository.inventory.SupplierRepository supplierRepository;
+    private final com.moeware.ims.repository.staff.CustomerRepository customerRepository;
     private final com.moeware.ims.repository.staff.WarehouseRepository warehouseRepository;
     private final com.moeware.ims.repository.UserRepository userRepository;
     private final com.moeware.ims.repository.inventory.ProductRepository productRepository;
@@ -60,68 +57,59 @@ public class PurchaseOrderService {
     // ==================== READ OPERATIONS ====================
 
     /**
-     * Get all purchase orders with optional filters (paginated)
+     * Get all sales orders with optional filters (paginated)
      */
-    public Page<PurchaseOrderSummaryResponse> getAllPurchaseOrders(
+    public Page<SalesOrderSummaryResponse> getAllSalesOrders(
             String search,
-            Long supplierId,
+            Long customerId,
             Long warehouseId,
-            PurchaseOrderStatus status,
+            SalesOrderStatus status,
             Long createdByUserId,
             LocalDate startDate,
             LocalDate endDate,
             Pageable pageable) {
 
-        return purchaseOrderRepository.findAllWithFilters(
-                search, supplierId, warehouseId, status, createdByUserId, startDate, endDate, pageable)
+        return salesOrderRepository.findAllWithFilters(
+                search, customerId, warehouseId, status, createdByUserId, startDate, endDate, pageable)
                 .map(this::toSummaryResponse);
     }
 
     /**
-     * Get purchase order by ID (full detail)
+     * Get sales order by ID (full detail)
      */
-    public PurchaseOrderResponse getPurchaseOrderById(Long id) {
-        PurchaseOrder po = findPurchaseOrderOrThrow(id);
-        return toResponse(po);
+    public SalesOrderResponse getSalesOrderById(Long id) {
+        SalesOrder so = findSalesOrderOrThrow(id);
+        return toResponse(so);
     }
 
     /**
-     * Get purchase orders pending approval
+     * Get sales orders by customer
      */
-    public Page<PurchaseOrderSummaryResponse> getPendingApprovalOrders(Pageable pageable) {
-        return purchaseOrderRepository.findByStatus(PurchaseOrderStatus.SUBMITTED, pageable)
-                .map(this::toSummaryResponse);
-    }
-
-    /**
-     * Get purchase orders by supplier
-     */
-    public Page<PurchaseOrderSummaryResponse> getOrdersBySupplier(
-            Long supplierId,
-            PurchaseOrderStatus status,
+    public Page<SalesOrderSummaryResponse> getOrdersByCustomer(
+            Long customerId,
+            SalesOrderStatus status,
             LocalDate startDate,
             LocalDate endDate,
             Pageable pageable) {
 
-        // Validate supplier exists
-        if (!supplierRepository.existsById(supplierId)) {
-            throw new ResourceNotFoundException("Supplier", "id", supplierId);
+        if (!customerRepository.existsById(customerId)) {
+            throw new ResourceNotFoundException("Customer", "id", customerId);
         }
-        return purchaseOrderRepository.findBySupplierIdWithFilters(supplierId, status, startDate, endDate, pageable)
+        return salesOrderRepository.findByCustomerIdWithFilters(customerId, status, startDate, endDate, pageable)
                 .map(this::toSummaryResponse);
     }
 
     // ==================== WRITE OPERATIONS ====================
 
     /**
-     * Create a new purchase order in DRAFT status
+     * Create a new sales order in PENDING status
      */
     @Transactional
-    public PurchaseOrderResponse createPurchaseOrder(PurchaseOrderRequest request, Long createdByUserId) {
-        log.info("Creating purchase order for supplier id: {}", request.getSupplierId());
+    public SalesOrderResponse createSalesOrder(SalesOrderRequest request, Long createdByUserId) {
+        log.info("Creating sales order for customer id: {}", request.getCustomerId());
 
-        Supplier supplier = supplierRepository.findById(request.getSupplierId())
-                .orElseThrow(() -> new ResourceNotFoundException("Supplier", "id", request.getSupplierId()));
+        Customer customer = customerRepository.findById(request.getCustomerId())
+                .orElseThrow(() -> new ResourceNotFoundException("Customer", "id", request.getCustomerId()));
 
         Warehouse warehouse = warehouseRepository.findById(request.getWarehouseId())
                 .orElseThrow(() -> new ResourceNotFoundException("Warehouse", "id", request.getWarehouseId()));
@@ -129,335 +117,323 @@ public class PurchaseOrderService {
         User createdByUser = userRepository.findById(createdByUserId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", createdByUserId));
 
-        PurchaseOrder po = PurchaseOrder.builder()
-                .poNumber(generatePoNumber(request.getOrderDate()))
-                .supplier(supplier)
+        SalesOrder so = SalesOrder.builder()
+                .soNumber(generateSoNumber(request.getOrderDate()))
+                .customer(customer)
+                .customerName(request.getCustomerName())
+                .customerEmail(request.getCustomerEmail())
+                .customerPhone(request.getCustomerPhone())
+                .shippingAddress(request.getShippingAddress())
+                .city(request.getCity())
+                .postalCode(request.getPostalCode())
                 .warehouse(warehouse)
                 .createdByUser(createdByUser)
-                .status(PurchaseOrderStatus.DRAFT)
+                .status(SalesOrderStatus.PENDING)
                 .orderDate(request.getOrderDate())
-                .expectedDeliveryDate(request.getExpectedDeliveryDate())
                 .taxAmount(request.getTaxAmount() != null ? request.getTaxAmount() : BigDecimal.ZERO)
-                .discountAmount(request.getDiscountAmount() != null ? request.getDiscountAmount() : BigDecimal.ZERO)
+                .shippingCost(request.getShippingCost() != null ? request.getShippingCost() : BigDecimal.ZERO)
                 .notes(request.getNotes())
                 .build();
 
         // Add line items
-        for (PurchaseOrderItemRequest itemReq : request.getItems()) {
+        for (SalesOrderItemRequest itemReq : request.getItems()) {
             Product product = productRepository.findById(itemReq.getProductId())
                     .orElseThrow(() -> new ResourceNotFoundException("Product", "id", itemReq.getProductId()));
 
-            PurchaseOrderItem item = PurchaseOrderItem.builder()
+            SalesOrderItem item = SalesOrderItem.builder()
                     .product(product)
-                    .quantityOrdered(itemReq.getQuantityOrdered())
-                    .quantityReceived(0)
+                    .quantity(itemReq.getQuantity())
                     .unitPrice(itemReq.getUnitPrice())
                     .build();
 
-            po.addItem(item);
+            so.addItem(item);
         }
 
-        po.calculateTotals();
-        PurchaseOrder saved = purchaseOrderRepository.save(po);
+        so.calculateTotals();
+        SalesOrder saved = salesOrderRepository.save(so);
 
-        log.info("Purchase order created: {}", saved.getPoNumber());
+        log.info("Sales order created: {}", saved.getSoNumber());
         return toResponse(saved);
     }
 
     /**
-     * Update a purchase order (DRAFT only)
+     * Update a sales order (PENDING only)
      */
     @Transactional
-    public PurchaseOrderResponse updatePurchaseOrder(Long id, PurchaseOrderRequest request) {
-        log.info("Updating purchase order id: {}", id);
+    public SalesOrderResponse updateSalesOrder(Long id, SalesOrderRequest request) {
+        log.info("Updating sales order id: {}", id);
 
-        PurchaseOrder po = findPurchaseOrderOrThrow(id);
+        SalesOrder so = findSalesOrderOrThrow(id);
 
-        if (po.getStatus() != PurchaseOrderStatus.DRAFT) {
-            throw new OrderNotEditableException("PurchaseOrder", id, po.getStatus().name());
+        if (so.getStatus() != SalesOrderStatus.PENDING) {
+            throw new OrderNotEditableException("SalesOrder", id, so.getStatus().name());
         }
 
-        Supplier supplier = supplierRepository.findById(request.getSupplierId())
-                .orElseThrow(() -> new ResourceNotFoundException("Supplier", "id", request.getSupplierId()));
+        Customer customer = customerRepository.findById(request.getCustomerId())
+                .orElseThrow(() -> new ResourceNotFoundException("Customer", "id", request.getCustomerId()));
 
         Warehouse warehouse = warehouseRepository.findById(request.getWarehouseId())
                 .orElseThrow(() -> new ResourceNotFoundException("Warehouse", "id", request.getWarehouseId()));
 
-        po.setSupplier(supplier);
-        po.setWarehouse(warehouse);
-        po.setOrderDate(request.getOrderDate());
-        po.setExpectedDeliveryDate(request.getExpectedDeliveryDate());
-        po.setTaxAmount(request.getTaxAmount() != null ? request.getTaxAmount() : BigDecimal.ZERO);
-        po.setDiscountAmount(request.getDiscountAmount() != null ? request.getDiscountAmount() : BigDecimal.ZERO);
-        po.setNotes(request.getNotes());
+        so.setCustomer(customer);
+        so.setCustomerName(request.getCustomerName());
+        so.setCustomerEmail(request.getCustomerEmail());
+        so.setCustomerPhone(request.getCustomerPhone());
+        so.setShippingAddress(request.getShippingAddress());
+        so.setCity(request.getCity());
+        so.setPostalCode(request.getPostalCode());
+        so.setWarehouse(warehouse);
+        so.setOrderDate(request.getOrderDate());
+        so.setTaxAmount(request.getTaxAmount() != null ? request.getTaxAmount() : BigDecimal.ZERO);
+        so.setShippingCost(request.getShippingCost() != null ? request.getShippingCost() : BigDecimal.ZERO);
+        so.setNotes(request.getNotes());
 
         // Replace all items
-        po.getItems().clear();
-        for (PurchaseOrderItemRequest itemReq : request.getItems()) {
+        so.getItems().clear();
+        for (SalesOrderItemRequest itemReq : request.getItems()) {
             Product product = productRepository.findById(itemReq.getProductId())
                     .orElseThrow(() -> new ResourceNotFoundException("Product", "id", itemReq.getProductId()));
 
-            PurchaseOrderItem item = PurchaseOrderItem.builder()
+            SalesOrderItem item = SalesOrderItem.builder()
                     .product(product)
-                    .quantityOrdered(itemReq.getQuantityOrdered())
-                    .quantityReceived(0)
+                    .quantity(itemReq.getQuantity())
                     .unitPrice(itemReq.getUnitPrice())
                     .build();
 
-            po.addItem(item);
+            so.addItem(item);
         }
 
-        po.calculateTotals();
-        PurchaseOrder updated = purchaseOrderRepository.save(po);
+        so.calculateTotals();
+        SalesOrder updated = salesOrderRepository.save(so);
 
-        log.info("Purchase order updated: {}", updated.getPoNumber());
+        log.info("Sales order updated: {}", updated.getSoNumber());
         return toResponse(updated);
     }
 
     /**
-     * Submit a DRAFT purchase order for approval -> SUBMITTED
+     * Confirm a PENDING sales order (reserve inventory) -> CONFIRMED
      */
     @Transactional
-    public PurchaseOrderResponse submitPurchaseOrder(Long id) {
-        log.info("Submitting purchase order id: {}", id);
+    public SalesOrderResponse confirmSalesOrder(Long id) {
+        log.info("Confirming sales order id: {}", id);
 
-        PurchaseOrder po = findPurchaseOrderOrThrow(id);
+        SalesOrder so = findSalesOrderOrThrow(id);
 
-        if (po.getStatus() != PurchaseOrderStatus.DRAFT) {
-            throw new InvalidOrderStatusTransitionException("PurchaseOrder", po.getStatus().name(), "SUBMITTED");
+        if (so.getStatus() != SalesOrderStatus.PENDING) {
+            throw new InvalidOrderStatusTransitionException("SalesOrder", so.getStatus().name(), "CONFIRMED");
         }
 
-        if (po.getItems().isEmpty()) {
-            throw new IllegalStateException("Cannot submit a purchase order with no items");
+        if (so.getItems().isEmpty()) {
+            throw new IllegalStateException("Cannot confirm a sales order with no items");
         }
 
-        po.setStatus(PurchaseOrderStatus.SUBMITTED);
-        PurchaseOrder updated = purchaseOrderRepository.save(po);
+        // TODO: Check inventory availability for each item in the assigned warehouse
+        // This will interact with the InventoryItem repository once that sprint is
+        // wired in.
+        // For now the status transition is tracked here; inventory reservation
+        // should be implemented as part of the inventory service integration.
 
-        log.info("Purchase order submitted: {}", updated.getPoNumber());
+        so.setStatus(SalesOrderStatus.CONFIRMED);
+        SalesOrder updated = salesOrderRepository.save(so);
+
+        log.info("Sales order confirmed: {}", updated.getSoNumber());
         return toResponse(updated);
     }
 
     /**
-     * Approve a SUBMITTED purchase order -> APPROVED (MANAGER/ADMIN only)
+     * Fulfill a CONFIRMED sales order (pick & pack, deduct inventory) -> FULFILLED
      */
     @Transactional
-    public PurchaseOrderResponse approvePurchaseOrder(Long id) {
-        log.info("Approving purchase order id: {}", id);
+    public SalesOrderResponse fulfillSalesOrder(Long id) {
+        log.info("Fulfilling sales order id: {}", id);
 
-        PurchaseOrder po = findPurchaseOrderOrThrow(id);
+        SalesOrder so = findSalesOrderOrThrow(id);
 
-        if (po.getStatus() != PurchaseOrderStatus.SUBMITTED) {
-            throw new InvalidOrderStatusTransitionException("PurchaseOrder", po.getStatus().name(), "APPROVED");
+        if (so.getStatus() != SalesOrderStatus.CONFIRMED) {
+            throw new InvalidOrderStatusTransitionException("SalesOrder", so.getStatus().name(), "FULFILLED");
         }
 
-        po.setStatus(PurchaseOrderStatus.APPROVED);
-        PurchaseOrder updated = purchaseOrderRepository.save(po);
+        // TODO: Deduct inventory quantities and create InventoryMovement records
+        // This will interact with InventoryItem and InventoryMovement repositories
+        // once the inventory service integration sprint is complete.
 
-        log.info("Purchase order approved: {}", updated.getPoNumber());
+        so.setStatus(SalesOrderStatus.FULFILLED);
+        so.setFulfillmentDate(LocalDate.now());
+        SalesOrder updated = salesOrderRepository.save(so);
+
+        log.info("Sales order fulfilled: {}", updated.getSoNumber());
         return toResponse(updated);
     }
 
     /**
-     * Reject a SUBMITTED purchase order back to DRAFT -> effectively cancel submission
-     * Returns to DRAFT so it can be edited and resubmitted (MANAGER/ADMIN only)
+     * Mark a FULFILLED sales order as SHIPPED -> SHIPPED
      */
     @Transactional
-    public PurchaseOrderResponse rejectPurchaseOrder(Long id, String reason) {
-        log.info("Rejecting purchase order id: {} - reason: {}", id, reason);
+    public SalesOrderResponse shipSalesOrder(Long id) {
+        log.info("Marking sales order as shipped, id: {}", id);
 
-        PurchaseOrder po = findPurchaseOrderOrThrow(id);
+        SalesOrder so = findSalesOrderOrThrow(id);
 
-        if (po.getStatus() != PurchaseOrderStatus.SUBMITTED) {
-            throw new InvalidOrderStatusTransitionException("PurchaseOrder", po.getStatus().name(), "DRAFT (rejected)");
+        if (so.getStatus() != SalesOrderStatus.FULFILLED) {
+            throw new InvalidOrderStatusTransitionException("SalesOrder", so.getStatus().name(), "SHIPPED");
         }
 
-        // Rejection returns the order to DRAFT with a reason appended to notes
-        po.setStatus(PurchaseOrderStatus.DRAFT);
-        String rejectionNote = "[REJECTED] " + reason;
-        po.setNotes(po.getNotes() != null ? po.getNotes() + "\n" + rejectionNote : rejectionNote);
+        so.setStatus(SalesOrderStatus.SHIPPED);
+        so.setShippingDate(LocalDate.now());
+        SalesOrder updated = salesOrderRepository.save(so);
 
-        PurchaseOrder updated = purchaseOrderRepository.save(po);
-        log.info("Purchase order rejected and returned to DRAFT: {}", updated.getPoNumber());
+        log.info("Sales order shipped: {}", updated.getSoNumber());
         return toResponse(updated);
     }
 
     /**
-     * Mark an APPROVED purchase order as RECEIVED, update inventory quantities
+     * Mark a SHIPPED sales order as DELIVERED -> DELIVERED
      */
     @Transactional
-    public PurchaseOrderResponse receivePurchaseOrder(Long id, ReceivePurchaseOrderRequest request) {
-        log.info("Receiving purchase order id: {}", id);
+    public SalesOrderResponse deliverSalesOrder(Long id) {
+        log.info("Marking sales order as delivered, id: {}", id);
 
-        PurchaseOrder po = findPurchaseOrderOrThrow(id);
+        SalesOrder so = findSalesOrderOrThrow(id);
 
-        if (po.getStatus() != PurchaseOrderStatus.APPROVED) {
-            throw new InvalidOrderStatusTransitionException("PurchaseOrder", po.getStatus().name(), "RECEIVED");
+        if (so.getStatus() != SalesOrderStatus.SHIPPED) {
+            throw new InvalidOrderStatusTransitionException("SalesOrder", so.getStatus().name(), "DELIVERED");
         }
 
-        // Update each item's received quantity
-        for (ReceivePurchaseOrderRequest.ItemReceipt itemReceipt : request.getItems()) {
-            PurchaseOrderItem item = purchaseOrderItemRepository
-                    .findByIdAndPurchaseOrderId(itemReceipt.getItemId(), id)
-                    .orElseThrow(() -> new ResourceNotFoundException(
-                            "PurchaseOrderItem", "id", itemReceipt.getItemId()));
+        so.setStatus(SalesOrderStatus.DELIVERED);
+        so.setDeliveryDate(LocalDate.now());
+        SalesOrder updated = salesOrderRepository.save(so);
 
-            int totalReceived = item.getQuantityReceived() + itemReceipt.getQuantityReceived();
-            if (totalReceived > item.getQuantityOrdered()) {
-                throw new IllegalArgumentException(
-                        String.format("Cannot receive more than ordered for item id %d. Ordered: %d, Already received: %d, Attempting to receive: %d",
-                                item.getId(), item.getQuantityOrdered(), item.getQuantityReceived(), itemReceipt.getQuantityReceived()));
-            }
-            item.setQuantityReceived(totalReceived);
-        }
-
-        po.setStatus(PurchaseOrderStatus.RECEIVED);
-        po.setActualDeliveryDate(request.getActualDeliveryDate());
-        if (request.getNotes() != null) {
-            String receiptNote = "[RECEIVED] " + request.getNotes();
-            po.setNotes(po.getNotes() != null ? po.getNotes() + "\n" + receiptNote : receiptNote);
-        }
-
-        PurchaseOrder updated = purchaseOrderRepository.save(po);
-        log.info("Purchase order received: {}", updated.getPoNumber());
+        log.info("Sales order delivered: {}", updated.getSoNumber());
         return toResponse(updated);
     }
 
     /**
-     * Cancel a purchase order (any status except RECEIVED)
+     * Cancel a sales order (any status before SHIPPED)
      */
     @Transactional
-    public PurchaseOrderResponse cancelPurchaseOrder(Long id, CancelOrderRequest request) {
-        log.info("Cancelling purchase order id: {}", id);
+    public SalesOrderResponse cancelSalesOrder(Long id, CancelOrderRequest request) {
+        log.info("Cancelling sales order id: {}", id);
 
-        PurchaseOrder po = findPurchaseOrderOrThrow(id);
+        SalesOrder so = findSalesOrderOrThrow(id);
 
-        if (po.getStatus() == PurchaseOrderStatus.RECEIVED) {
-            throw new InvalidOrderStatusTransitionException("PurchaseOrder", po.getStatus().name(), "CANCELLED");
+        if (so.getStatus() == SalesOrderStatus.SHIPPED
+                || so.getStatus() == SalesOrderStatus.DELIVERED
+                || so.getStatus() == SalesOrderStatus.CANCELLED) {
+            throw new InvalidOrderStatusTransitionException("SalesOrder", so.getStatus().name(), "CANCELLED");
         }
-        if (po.getStatus() == PurchaseOrderStatus.CANCELLED) {
-            throw new InvalidOrderStatusTransitionException("PurchaseOrder", po.getStatus().name(), "CANCELLED");
-        }
 
-        po.setStatus(PurchaseOrderStatus.CANCELLED);
+        // TODO: Release reserved inventory if the order was CONFIRMED or FULFILLED
+        // This will interact with the inventory service once that integration is done.
+
+        so.setStatus(SalesOrderStatus.CANCELLED);
         String cancellationNote = "[CANCELLED] " + request.getReason();
-        po.setNotes(po.getNotes() != null ? po.getNotes() + "\n" + cancellationNote : cancellationNote);
+        so.setNotes(so.getNotes() != null ? so.getNotes() + "\n" + cancellationNote : cancellationNote);
 
-        PurchaseOrder updated = purchaseOrderRepository.save(po);
-        log.info("Purchase order cancelled: {}", updated.getPoNumber());
+        SalesOrder updated = salesOrderRepository.save(so);
+        log.info("Sales order cancelled: {}", updated.getSoNumber());
         return toResponse(updated);
-    }
-
-    /**
-     * Delete a purchase order (DRAFT only)
-     */
-    @Transactional
-    public void deletePurchaseOrder(Long id) {
-        log.info("Deleting purchase order id: {}", id);
-
-        PurchaseOrder po = findPurchaseOrderOrThrow(id);
-
-        if (po.getStatus() != PurchaseOrderStatus.DRAFT) {
-            throw new OrderNotEditableException("PurchaseOrder", id, po.getStatus().name());
-        }
-
-        purchaseOrderRepository.delete(po);
-        log.info("Purchase order deleted: {}", po.getPoNumber());
     }
 
     // ==================== PRIVATE HELPERS ====================
 
-    private PurchaseOrder findPurchaseOrderOrThrow(Long id) {
-        return purchaseOrderRepository.findById(id)
-                .orElseThrow(() -> new PurchaseOrderNotFoundException(id));
+    private SalesOrder findSalesOrderOrThrow(Long id) {
+        return salesOrderRepository.findById(id)
+                .orElseThrow(() -> new SalesOrderNotFoundException(id));
     }
 
     /**
-     * Generate a unique PO number in format PO-YYYYMMDD-SEQUENCE
+     * Generate a unique SO number in format SO-YYYYMMDD-SEQUENCE
      */
-    private String generatePoNumber(LocalDate orderDate) {
+    private String generateSoNumber(LocalDate orderDate) {
         String dateStr = orderDate.format(DateTimeFormatter.ofPattern("yyyyMMdd"));
-        long count = purchaseOrderRepository.countByOrderDate(orderDate) + 1;
-        return String.format("PO-%s-%04d", dateStr, count);
+        long count = salesOrderRepository.countByOrderDate(orderDate) + 1;
+        return String.format("SO-%s-%04d", dateStr, count);
     }
 
     // ==================== MAPPERS ====================
 
-    public PurchaseOrderResponse toResponse(PurchaseOrder po) {
-        List<PurchaseOrderItemResponse> itemResponses = po.getItems().stream()
+    public SalesOrderResponse toResponse(SalesOrder so) {
+        List<SalesOrderItemResponse> itemResponses = so.getItems().stream()
                 .map(this::toItemResponse)
                 .collect(Collectors.toList());
 
-        return PurchaseOrderResponse.builder()
-                .id(po.getId())
-                .poNumber(po.getPoNumber())
-                .supplier(PurchaseOrderResponse.SupplierSummary.builder()
-                        .id(po.getSupplier().getId())
-                        .name(po.getSupplier().getName())
-                        .code(po.getSupplier().getCode())
-                        .contactPerson(po.getSupplier().getContactPerson())
-                        .email(po.getSupplier().getEmail())
+        return SalesOrderResponse.builder()
+                .id(so.getId())
+                .soNumber(so.getSoNumber())
+                .customer(SalesOrderResponse.CustomerSummary.builder()
+                        .id(so.getCustomer().getId())
+                        .customerCode(so.getCustomer().getCustomerCode())
+                        .contactName(so.getCustomer().getContactName())
+                        .email(so.getCustomer().getEmail())
                         .build())
-                .warehouse(PurchaseOrderResponse.WarehouseSummary.builder()
-                        .id(po.getWarehouse().getId())
-                        .name(po.getWarehouse().getName())
-                        .code(po.getWarehouse().getCode())
+                .customerName(so.getCustomerName())
+                .customerEmail(so.getCustomerEmail())
+                .customerPhone(so.getCustomerPhone())
+                .shippingAddress(so.getShippingAddress())
+                .city(so.getCity())
+                .postalCode(so.getPostalCode())
+                .warehouse(SalesOrderResponse.WarehouseSummary.builder()
+                        .id(so.getWarehouse().getId())
+                        .name(so.getWarehouse().getName())
+                        .code(so.getWarehouse().getCode())
                         .build())
-                .createdByUser(PurchaseOrderResponse.UserSummary.builder()
-                        .id(po.getCreatedByUser().getId())
-                        .username(po.getCreatedByUser().getUsername())
-                        .email(po.getCreatedByUser().getEmail())
+                .createdByUser(SalesOrderResponse.UserSummary.builder()
+                        .id(so.getCreatedByUser().getId())
+                        .username(so.getCreatedByUser().getUsername())
+                        .email(so.getCreatedByUser().getEmail())
                         .build())
-                .status(po.getStatus())
-                .orderDate(po.getOrderDate())
-                .expectedDeliveryDate(po.getExpectedDeliveryDate())
-                .actualDeliveryDate(po.getActualDeliveryDate())
-                .subtotal(po.getSubtotal())
-                .taxAmount(po.getTaxAmount())
-                .discountAmount(po.getDiscountAmount())
-                .totalAmount(po.getTotalAmount())
-                .notes(po.getNotes())
-                .itemCount(po.getItems().size())
+                .status(so.getStatus())
+                .orderDate(so.getOrderDate())
+                .fulfillmentDate(so.getFulfillmentDate())
+                .shippingDate(so.getShippingDate())
+                .deliveryDate(so.getDeliveryDate())
+                .subtotal(so.getSubtotal())
+                .taxAmount(so.getTaxAmount())
+                .shippingCost(so.getShippingCost())
+                .totalAmount(so.getTotalAmount())
+                .notes(so.getNotes())
+                .itemCount(so.getItems().size())
                 .items(itemResponses)
-                .version(po.getVersion())
-                .createdAt(po.getCreatedAt())
-                .updatedAt(po.getUpdatedAt())
-                .createdBy(po.getCreatedBy())
-                .updatedBy(po.getUpdatedBy())
+                .version(so.getVersion())
+                .createdAt(so.getCreatedAt())
+                .updatedAt(so.getUpdatedAt())
+                .createdBy(so.getCreatedBy())
+                .updatedBy(so.getUpdatedBy())
                 .build();
     }
 
-    private PurchaseOrderSummaryResponse toSummaryResponse(PurchaseOrder po) {
-        return PurchaseOrderSummaryResponse.builder()
-                .id(po.getId())
-                .poNumber(po.getPoNumber())
-                .supplierId(po.getSupplier().getId())
-                .supplierName(po.getSupplier().getName())
-                .supplierCode(po.getSupplier().getCode())
-                .warehouseId(po.getWarehouse().getId())
-                .warehouseName(po.getWarehouse().getName())
-                .status(po.getStatus())
-                .orderDate(po.getOrderDate())
-                .expectedDeliveryDate(po.getExpectedDeliveryDate())
-                .actualDeliveryDate(po.getActualDeliveryDate())
-                .itemCount(po.getItems().size())
-                .subtotal(po.getSubtotal())
-                .taxAmount(po.getTaxAmount())
-                .discountAmount(po.getDiscountAmount())
-                .totalAmount(po.getTotalAmount())
-                .createdAt(po.getCreatedAt())
-                .updatedAt(po.getUpdatedAt())
+    private SalesOrderSummaryResponse toSummaryResponse(SalesOrder so) {
+        return SalesOrderSummaryResponse.builder()
+                .id(so.getId())
+                .soNumber(so.getSoNumber())
+                .customerId(so.getCustomer().getId())
+                .customerCode(so.getCustomer().getCustomerCode())
+                .customerName(so.getCustomerName())
+                .customerEmail(so.getCustomerEmail())
+                .warehouseId(so.getWarehouse().getId())
+                .warehouseName(so.getWarehouse().getName())
+                .status(so.getStatus())
+                .orderDate(so.getOrderDate())
+                .fulfillmentDate(so.getFulfillmentDate())
+                .shippingDate(so.getShippingDate())
+                .deliveryDate(so.getDeliveryDate())
+                .itemCount(so.getItems().size())
+                .subtotal(so.getSubtotal())
+                .taxAmount(so.getTaxAmount())
+                .shippingCost(so.getShippingCost())
+                .totalAmount(so.getTotalAmount())
+                .createdAt(so.getCreatedAt())
+                .updatedAt(so.getUpdatedAt())
                 .build();
     }
 
-    private PurchaseOrderItemResponse toItemResponse(PurchaseOrderItem item) {
-        return PurchaseOrderItemResponse.builder()
+    private SalesOrderItemResponse toItemResponse(SalesOrderItem item) {
+        return SalesOrderItemResponse.builder()
                 .id(item.getId())
                 .productId(item.getProduct().getId())
                 .productSku(item.getProduct().getSku())
                 .productName(item.getProduct().getName())
-                .quantityOrdered(item.getQuantityOrdered())
-                .quantityReceived(item.getQuantityReceived())
+                .quantity(item.getQuantity())
                 .unitPrice(item.getUnitPrice())
                 .lineTotal(item.getLineTotal())
                 .createdAt(item.getCreatedAt())
