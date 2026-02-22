@@ -11,7 +11,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.moeware.ims.dto.transaction.CancelOrderRequest;
 import com.moeware.ims.dto.transaction.salesOrder.SalesOrderItemRequest;
 import com.moeware.ims.dto.transaction.salesOrder.SalesOrderItemResponse;
 import com.moeware.ims.dto.transaction.salesOrder.SalesOrderRequest;
@@ -46,6 +45,7 @@ import lombok.extern.slf4j.Slf4j;
 public class SalesOrderService {
 
     private final SalesOrderRepository salesOrderRepository;
+    private final OrderInventoryService orderInventoryService;
 
     // These repositories are assumed to exist from previous sprints
     // Adjust package paths to match your project structure
@@ -215,54 +215,42 @@ public class SalesOrderService {
      */
     @Transactional
     public SalesOrderResponse confirmSalesOrder(Long id) {
-        log.info("Confirming sales order id: {}", id);
+        SalesOrder order = findSalesOrderOrThrow(id);
 
-        SalesOrder so = findSalesOrderOrThrow(id);
-
-        if (so.getStatus() != SalesOrderStatus.PENDING) {
-            throw new InvalidOrderStatusTransitionException("SalesOrder", so.getStatus().name(), "CONFIRMED");
+        if (order.getStatus() != SalesOrderStatus.PENDING) {
+            throw new InvalidOrderStatusTransitionException(
+                    "SalesOrder", order.getStatus().name(), SalesOrderStatus.CONFIRMED.name());
         }
 
-        if (so.getItems().isEmpty()) {
-            throw new IllegalStateException("Cannot confirm a sales order with no items");
-        }
+        // Check inventory availability (throws InsufficientStockException if any item
+        // is short)
+        orderInventoryService.checkInventoryAvailability(order);
 
-        // TODO: Check inventory availability for each item in the assigned warehouse
-        // This will interact with the InventoryItem repository once that sprint is
-        // wired in.
-        // For now the status transition is tracked here; inventory reservation
-        // should be implemented as part of the inventory service integration.
-
-        so.setStatus(SalesOrderStatus.CONFIRMED);
-        SalesOrder updated = salesOrderRepository.save(so);
-
-        log.info("Sales order confirmed: {}", updated.getSoNumber());
-        return toResponse(updated);
+        order.setStatus(SalesOrderStatus.CONFIRMED);
+        return toResponse(salesOrderRepository.save(order));
     }
 
     /**
      * Fulfill a CONFIRMED sales order (pick & pack, deduct inventory) -> FULFILLED
      */
     @Transactional
-    public SalesOrderResponse fulfillSalesOrder(Long id) {
-        log.info("Fulfilling sales order id: {}", id);
+    public SalesOrderResponse fulfillSalesOrder(Long id, Long performedByUserId) {
+        SalesOrder order = findSalesOrderOrThrow(id);
 
-        SalesOrder so = findSalesOrderOrThrow(id);
-
-        if (so.getStatus() != SalesOrderStatus.CONFIRMED) {
-            throw new InvalidOrderStatusTransitionException("SalesOrder", so.getStatus().name(), "FULFILLED");
+        if (order.getStatus() != SalesOrderStatus.CONFIRMED) {
+            throw new InvalidOrderStatusTransitionException(
+                    "SalesOrder", order.getStatus().name(), SalesOrderStatus.FULFILLED.name());
         }
 
-        // TODO: Deduct inventory quantities and create InventoryMovement records
-        // This will interact with InventoryItem and InventoryMovement repositories
-        // once the inventory service integration sprint is complete.
+        User performedBy = userRepository.findById(performedByUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", performedByUserId));
 
-        so.setStatus(SalesOrderStatus.FULFILLED);
-        so.setFulfillmentDate(LocalDate.now());
-        SalesOrder updated = salesOrderRepository.save(so);
+        // Deduct stock and create SHIPMENT movement records for each line item
+        orderInventoryService.deductInventoryForSalesOrder(order, performedBy);
 
-        log.info("Sales order fulfilled: {}", updated.getSoNumber());
-        return toResponse(updated);
+        order.setStatus(SalesOrderStatus.FULFILLED);
+        order.setFulfillmentDate(java.time.LocalDate.now());
+        return toResponse(salesOrderRepository.save(order));
     }
 
     /**
@@ -311,27 +299,31 @@ public class SalesOrderService {
      * Cancel a sales order (any status before SHIPPED)
      */
     @Transactional
-    public SalesOrderResponse cancelSalesOrder(Long id, CancelOrderRequest request) {
-        log.info("Cancelling sales order id: {}", id);
+    public SalesOrderResponse cancelSalesOrder(Long id, String reason, Long performedByUserId) {
+        SalesOrder order = findSalesOrderOrThrow(id);
 
-        SalesOrder so = findSalesOrderOrThrow(id);
-
-        if (so.getStatus() == SalesOrderStatus.SHIPPED
-                || so.getStatus() == SalesOrderStatus.DELIVERED
-                || so.getStatus() == SalesOrderStatus.CANCELLED) {
-            throw new InvalidOrderStatusTransitionException("SalesOrder", so.getStatus().name(), "CANCELLED");
+        if (order.getStatus() == SalesOrderStatus.SHIPPED
+                || order.getStatus() == SalesOrderStatus.DELIVERED
+                || order.getStatus() == SalesOrderStatus.CANCELLED) {
+            throw new OrderNotEditableException("SalesOrder", id, order.getStatus().name());
         }
 
-        // TODO: Release reserved inventory if the order was CONFIRMED or FULFILLED
-        // This will interact with the inventory service once that integration is done.
+        // If the order was already fulfilled, we must return stock to the warehouse
+        if (order.getStatus() == SalesOrderStatus.FULFILLED) {
+            User performedBy = userRepository.findById(performedByUserId)
+                    .orElseThrow(() -> new ResourceNotFoundException("User", "id", performedByUserId));
+            orderInventoryService.releaseInventoryForCancelledSalesOrder(order, performedBy);
+        }
+        // PENDING and CONFIRMED cancellations require no inventory action
+        // (stock was only checked at CONFIRM, never deducted)
 
-        so.setStatus(SalesOrderStatus.CANCELLED);
-        String cancellationNote = "[CANCELLED] " + request.getReason();
-        so.setNotes(so.getNotes() != null ? so.getNotes() + "\n" + cancellationNote : cancellationNote);
-
-        SalesOrder updated = salesOrderRepository.save(so);
-        log.info("Sales order cancelled: {}", updated.getSoNumber());
-        return toResponse(updated);
+        order.setStatus(SalesOrderStatus.CANCELLED);
+        if (reason != null && !reason.isBlank()) {
+            order.setNotes(
+                    (order.getNotes() != null ? order.getNotes() + " | " : "")
+                            + "CANCELLED: " + reason);
+        }
+        return toResponse(salesOrderRepository.save(order));
     }
 
     // ==================== PRIVATE HELPERS ====================

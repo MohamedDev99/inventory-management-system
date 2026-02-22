@@ -226,8 +226,6 @@ public class ShipmentService {
         private String generateShipmentNumber() {
                 LocalDate today = LocalDate.now();
                 String dateStr = today.format(DateTimeFormatter.ofPattern("yyyyMMdd"));
-                // long count = shipmentRepository.existsByShipmentNumber(
-                // "SHIP-" + dateStr + "-0001") ? 0L : 0L; // placeholder — real count below
 
                 // Count how many shipments already exist for today to derive the next sequence
                 long existingToday = shipmentRepository.findAllWithFilters(null, null, null,

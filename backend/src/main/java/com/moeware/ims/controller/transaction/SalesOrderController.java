@@ -152,9 +152,10 @@ public class SalesOrderController {
         @PatchMapping("/{id}/fulfill")
         @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'WAREHOUSE_STAFF')")
         public ResponseEntity<ApiResponseWpp<SalesOrderResponse>> fulfillSalesOrder(
-                        @Parameter(description = "Sales order ID", required = true) @PathVariable Long id) {
+                        @Parameter(description = "Sales order ID", required = true) @PathVariable Long id,
+                        @Parameter(description = "ID of the warehouse staff or manager performing the fulfillment and deducting inventory") @RequestParam Long performedByUserId) {
 
-                SalesOrderResponse response = salesOrderService.fulfillSalesOrder(id);
+                SalesOrderResponse response = salesOrderService.fulfillSalesOrder(id, performedByUserId);
                 return ResponseEntity.ok(ApiResponseWpp.success(response, "Sales order fulfilled successfully"));
         }
 
@@ -195,9 +196,11 @@ public class SalesOrderController {
         @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
         public ResponseEntity<ApiResponseWpp<SalesOrderResponse>> cancelSalesOrder(
                         @Parameter(description = "Sales order ID", required = true) @PathVariable Long id,
+                        @Parameter(description = "ID of the user cancelling the order — required to record the inventory reversal movement if order was already fulfilled") @RequestParam Long performedByUserId,
                         @Valid @RequestBody CancelOrderRequest request) {
 
-                SalesOrderResponse response = salesOrderService.cancelSalesOrder(id, request);
+                SalesOrderResponse response = salesOrderService.cancelSalesOrder(id, request.getReason(),
+                                performedByUserId);
                 return ResponseEntity.ok(ApiResponseWpp.success(response, "Sales order cancelled successfully"));
         }
 

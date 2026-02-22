@@ -39,7 +39,7 @@ import lombok.extern.slf4j.Slf4j;
  * Service for purchase order business logic and workflow management
  *
  * Workflow: DRAFT -> SUBMITTED -> APPROVED -> RECEIVED
- *           Any status -> CANCELLED (except RECEIVED)
+ * Any status -> CANCELLED (except RECEIVED)
  */
 @Service
 @RequiredArgsConstructor
@@ -49,6 +49,7 @@ public class PurchaseOrderService {
 
     private final PurchaseOrderRepository purchaseOrderRepository;
     private final PurchaseOrderItemRepository purchaseOrderItemRepository;
+    private final OrderInventoryService orderInventoryService;
 
     // These repositories are assumed to exist from previous sprints
     // Adjust package paths to match your project structure
@@ -259,7 +260,8 @@ public class PurchaseOrderService {
     }
 
     /**
-     * Reject a SUBMITTED purchase order back to DRAFT -> effectively cancel submission
+     * Reject a SUBMITTED purchase order back to DRAFT -> effectively cancel
+     * submission
      * Returns to DRAFT so it can be edited and resubmitted (MANAGER/ADMIN only)
      */
     @Transactional
@@ -286,41 +288,56 @@ public class PurchaseOrderService {
      * Mark an APPROVED purchase order as RECEIVED, update inventory quantities
      */
     @Transactional
-    public PurchaseOrderResponse receivePurchaseOrder(Long id, ReceivePurchaseOrderRequest request) {
-        log.info("Receiving purchase order id: {}", id);
+    public PurchaseOrderResponse receivePurchaseOrder(Long id, ReceivePurchaseOrderRequest request,
+            Long performedByUserId) {
+        PurchaseOrder order = findPurchaseOrderOrThrow(id);
 
-        PurchaseOrder po = findPurchaseOrderOrThrow(id);
-
-        if (po.getStatus() != PurchaseOrderStatus.APPROVED) {
-            throw new InvalidOrderStatusTransitionException("PurchaseOrder", po.getStatus().name(), "RECEIVED");
+        if (order.getStatus() != PurchaseOrderStatus.APPROVED) {
+            throw new InvalidOrderStatusTransitionException(
+                    "PurchaseOrder", order.getStatus().name(), PurchaseOrderStatus.RECEIVED.name());
         }
 
-        // Update each item's received quantity
-        for (ReceivePurchaseOrderRequest.ItemReceipt itemReceipt : request.getItems()) {
+        User performedBy = userRepository.findById(performedByUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", performedByUserId));
+
+        // Update quantityReceived on each line item
+        for (ReceivePurchaseOrderRequest.ItemReceipt receipt : request.getItems()) {
             PurchaseOrderItem item = purchaseOrderItemRepository
-                    .findByIdAndPurchaseOrderId(itemReceipt.getItemId(), id)
+                    .findByIdAndPurchaseOrderId(receipt.getItemId(), id)
                     .orElseThrow(() -> new ResourceNotFoundException(
-                            "PurchaseOrderItem", "id", itemReceipt.getItemId()));
+                            "PurchaseOrderItem", "id", receipt.getItemId()));
 
-            int totalReceived = item.getQuantityReceived() + itemReceipt.getQuantityReceived();
-            if (totalReceived > item.getQuantityOrdered()) {
+            int alreadyReceived = item.getQuantityReceived();
+            int newTotal = alreadyReceived + receipt.getQuantityReceived();
+
+            if (newTotal > item.getQuantityOrdered()) {
                 throw new IllegalArgumentException(
-                        String.format("Cannot receive more than ordered for item id %d. Ordered: %d, Already received: %d, Attempting to receive: %d",
-                                item.getId(), item.getQuantityOrdered(), item.getQuantityReceived(), itemReceipt.getQuantityReceived()));
+                        String.format("Total received quantity (%d) exceeds ordered quantity (%d) for item %d.",
+                                newTotal, item.getQuantityOrdered(), item.getId()));
             }
-            item.setQuantityReceived(totalReceived);
+
+            item.setQuantityReceived(newTotal);
+            purchaseOrderItemRepository.save(item);
         }
 
-        po.setStatus(PurchaseOrderStatus.RECEIVED);
-        po.setActualDeliveryDate(request.getActualDeliveryDate());
-        if (request.getNotes() != null) {
-            String receiptNote = "[RECEIVED] " + request.getNotes();
-            po.setNotes(po.getNotes() != null ? po.getNotes() + "\n" + receiptNote : receiptNote);
+        // Update notes if provided
+        if (request.getNotes() != null && !request.getNotes().isBlank()) {
+            order.setNotes(
+                    (order.getNotes() != null ? order.getNotes() + " | " : "")
+                            + request.getNotes());
         }
 
-        PurchaseOrder updated = purchaseOrderRepository.save(po);
-        log.info("Purchase order received: {}", updated.getPoNumber());
-        return toResponse(updated);
+        // Set actual delivery date
+        if (request.getActualDeliveryDate() != null) {
+            order.setActualDeliveryDate(request.getActualDeliveryDate());
+        }
+
+        // Increment stock and create RECEIPT movement records for received quantities
+        // <-- ADDED
+        orderInventoryService.receiveInventoryForPurchaseOrder(order, performedBy);
+
+        order.setStatus(PurchaseOrderStatus.RECEIVED);
+        return toResponse(purchaseOrderRepository.save(order));
     }
 
     /**
