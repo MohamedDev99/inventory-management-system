@@ -15,10 +15,12 @@ import com.moeware.ims.dto.inventory.product.ProductResponse;
 import com.moeware.ims.dto.inventory.product.ProductUpdateRequest;
 import com.moeware.ims.entity.inventory.Category;
 import com.moeware.ims.entity.inventory.Product;
+import com.moeware.ims.exception.inventory.category.CategoryNotFoundException;
+import com.moeware.ims.exception.inventory.product.ProductAlreadyExistsException;
+import com.moeware.ims.exception.inventory.product.ProductNotFoundException;
 import com.moeware.ims.repository.inventory.CategoryRepository;
 import com.moeware.ims.repository.inventory.ProductRepository;
 
-import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -47,17 +49,16 @@ public class ProductService {
 
         // Validate unique constraints
         if (productRepository.existsBySku(request.getSku())) {
-            throw new IllegalArgumentException("Product with SKU '" + request.getSku() + "' already exists");
+            throw new ProductAlreadyExistsException("sku", request.getSku());
         }
 
         if (request.getBarcode() != null && productRepository.existsByBarcode(request.getBarcode())) {
-            throw new IllegalArgumentException("Product with barcode '" + request.getBarcode() + "' already exists");
+            throw new ProductAlreadyExistsException("barcode", request.getBarcode());
         }
 
         // Validate category exists
         Category category = categoryRepository.findById(request.getCategoryId())
-                .orElseThrow(() -> new EntityNotFoundException(
-                        "Category with ID " + request.getCategoryId() + " not found"));
+                .orElseThrow(() -> new CategoryNotFoundException(request.getCategoryId()));
 
         // Create product entity
         Product product = Product.builder()
@@ -102,7 +103,7 @@ public class ProductService {
     public ProductResponse getProductBySku(String sku) {
         log.debug("Fetching product with SKU: {}", sku);
         Product product = productRepository.findBySku(sku)
-                .orElseThrow(() -> new EntityNotFoundException("Product with SKU '" + sku + "' not found"));
+                .orElseThrow(() -> new ProductNotFoundException("sku", sku));
         return mapToResponse(product);
     }
 
@@ -115,7 +116,7 @@ public class ProductService {
     public ProductResponse getProductByBarcode(String barcode) {
         log.debug("Fetching product with barcode: {}", barcode);
         Product product = productRepository.findByBarcode(barcode)
-                .orElseThrow(() -> new EntityNotFoundException("Product with barcode '" + barcode + "' not found"));
+                .orElseThrow(() -> new ProductNotFoundException("barcode", barcode));
         return mapToResponse(product);
     }
 
@@ -179,7 +180,7 @@ public class ProductService {
 
         // Validate category exists
         if (!categoryRepository.existsById(categoryId)) {
-            throw new EntityNotFoundException("Category with ID " + categoryId + " not found");
+            throw new CategoryNotFoundException(categoryId);
         }
 
         Page<Product> products = productRepository.findByCategoryId(categoryId, pageable);
@@ -247,8 +248,7 @@ public class ProductService {
         }
         if (request.getCategoryId() != null) {
             Category category = categoryRepository.findById(request.getCategoryId())
-                    .orElseThrow(() -> new EntityNotFoundException(
-                            "Category with ID " + request.getCategoryId() + " not found"));
+                    .orElseThrow(() -> new CategoryNotFoundException(request.getCategoryId()));
             product.setCategory(category);
         }
         if (request.getUnit() != null) {
@@ -270,8 +270,7 @@ public class ProductService {
             // Check if barcode is being changed and if new barcode already exists
             if (!request.getBarcode().equals(product.getBarcode()) &&
                     productRepository.existsByBarcode(request.getBarcode())) {
-                throw new IllegalArgumentException(
-                        "Product with barcode '" + request.getBarcode() + "' already exists");
+                throw new ProductAlreadyExistsException("barcode", request.getBarcode());
             }
             product.setBarcode(request.getBarcode());
         }
@@ -314,7 +313,7 @@ public class ProductService {
         log.warn("Hard deleting product with ID: {}", id);
 
         if (!productRepository.existsById(id)) {
-            throw new EntityNotFoundException("Product with ID " + id + " not found");
+            throw new ProductNotFoundException(id);
         }
 
         productRepository.deleteById(id);
@@ -349,7 +348,7 @@ public class ProductService {
 
     private Product findProductById(Long id) {
         return productRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Product with ID " + id + " not found"));
+                .orElseThrow(() -> new ProductNotFoundException(id));
     }
 
     private ProductResponse mapToResponse(Product product) {
