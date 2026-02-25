@@ -10,6 +10,10 @@ jobs:
   auto-assign-project:
     runs-on: ubuntu-latest
     name: Auto-manage project cards
+    permissions:
+      issues: write
+      pull-requests: write
+      repository-projects: write
     steps:
       - name: Move new issues to Backlog
         if: github.event.action == 'opened' && github.event.issue
