@@ -20,7 +20,7 @@ jobs:
         uses: actions/add-to-project@v0.5.0
         with:
           project-url: https://github.com/users/MohamedDev99/projects/1
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ PROJECT_PAT }}
           labeled: ""
           label-operator: OR
 
@@ -29,39 +29,39 @@ jobs:
         uses: actions/add-to-project@v0.5.0
         with:
           project-url: https://github.com/users/MohamedDev99/projects/1
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ PROJECT_PAT }}
 
       - name: Move closed issues to Done
         if: github.event.action == 'closed' && github.event.issue
         uses: actions/add-to-project@v0.5.0
         with:
           project-url: https://github.com/users/MohamedDev99/projects/1
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ PROJECT_PAT }}
 
       - name: Move reopened issues to Backlog
         if: github.event.action == 'reopened' && github.event.issue
         uses: actions/add-to-project@v0.5.0
         with:
           project-url: https://github.com/users/MohamedDev99/projects/1
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ PROJECT_PAT }}
 
       - name: Move new PRs to In Progress
         if: github.event.action == 'opened' && github.event.pull_request
         uses: actions/add-to-project@v0.5.0
         with:
           project-url: https://github.com/users/MohamedDev99/projects/1
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ PROJECT_PAT }}
 
       - name: Move PRs to Review when review requested
         if: github.event.action == 'review_requested' && github.event.pull_request
         uses: actions/add-to-project@v0.5.0
         with:
           project-url: https://github.com/users/MohamedDev99/projects/1
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.PROJECT_PAT }}
 
       - name: Move merged PRs to Done
         if: github.event.pull_request.merged == true
         uses: actions/add-to-project@v0.5.0
         with:
           project-url: https://github.com/users/MohamedDev99/projects/1
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.PROJECT_PAT }}
