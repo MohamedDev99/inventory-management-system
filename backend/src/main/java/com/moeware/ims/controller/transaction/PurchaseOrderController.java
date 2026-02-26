@@ -157,6 +157,7 @@ public class PurchaseOrderController {
                         @Parameter(description = "Purchase order ID", required = true) @PathVariable Long id) {
 
                 PurchaseOrderResponse response = purchaseOrderService.submitPurchaseOrder(id);
+
                 return ResponseEntity.ok(ApiResponseWpp.success(response, "Purchase order submitted for approval"));
         }
 
