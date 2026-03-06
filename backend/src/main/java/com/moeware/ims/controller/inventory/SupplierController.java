@@ -1,9 +1,12 @@
 package com.moeware.ims.controller.inventory;
 
+import java.time.LocalDate;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -17,7 +20,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.moeware.ims.dto.ApiResponseWpp;
 import com.moeware.ims.dto.inventory.supplier.SupplierDTO;
+import com.moeware.ims.dto.inventory.supplier.SupplierPerformanceDTO;
+import com.moeware.ims.dto.transaction.purchaseOrder.PurchaseOrderResponse;
+import com.moeware.ims.enums.transaction.PurchaseOrderStatus;
 import com.moeware.ims.service.inventory.SupplierService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -34,218 +41,285 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * REST Controller for Supplier management
  * Provides endpoints for CRUD operations on suppliers
+ * All responses wrapped in ApiResponseWpp for consistency
+ *
+ * @author MoeWare Team
  */
 @RestController
-@RequestMapping("/api/suppliers")
+@RequestMapping("/api/v1/suppliers")
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Suppliers", description = "Supplier management APIs")
 public class SupplierController {
 
-    private final SupplierService supplierService;
+        private final SupplierService supplierService;
 
-    /**
-     * Get all suppliers with pagination and filters
-     */
-    @Operation(summary = "Get all suppliers", description = "Retrieve a paginated list of suppliers with optional filters for active status, country, rating range, and search term")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Successfully retrieved suppliers", content = @Content(schema = @Schema(implementation = Page.class))),
-            @ApiResponse(responseCode = "400", description = "Invalid parameters", content = @Content),
-            @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
-    })
-    @GetMapping
-    public ResponseEntity<Page<SupplierDTO>> getAllSuppliers(
-            @Parameter(description = "Filter by active status") @RequestParam(required = false) Boolean isActive,
-            @Parameter(description = "Filter by country") @RequestParam(required = false) String country,
-            @Parameter(description = "Minimum rating (1-5)") @RequestParam(required = false) Integer minRating,
-            @Parameter(description = "Maximum rating (1-5)") @RequestParam(required = false) Integer maxRating,
-            @Parameter(description = "Search by name, code, or email") @RequestParam(required = false) String search,
-            @PageableDefault(size = 20, sort = "name", direction = Sort.Direction.ASC) Pageable pageable) {
+        /**
+         * Get all suppliers with pagination and filters
+         */
+        @Operation(summary = "Get all suppliers", description = "Retrieve a paginated list of suppliers with optional filters for active status, country, rating range, and search term")
+        @ApiResponses(value = {
+                        @ApiResponse(responseCode = "200", description = "Successfully retrieved suppliers", content = @Content(schema = @Schema(implementation = ApiResponseWpp.class))),
+                        @ApiResponse(responseCode = "400", description = "Invalid parameters", content = @Content),
+                        @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
+        })
+        @GetMapping
+        public ResponseEntity<ApiResponseWpp<Page<SupplierDTO>>> getAllSuppliers(
+                        @Parameter(description = "Filter by active status") @RequestParam(required = false) Boolean isActive,
+                        @Parameter(description = "Filter by country") @RequestParam(required = false) String country,
+                        @Parameter(description = "Minimum rating (1-5)") @RequestParam(required = false) Integer minRating,
+                        @Parameter(description = "Maximum rating (1-5)") @RequestParam(required = false) Integer maxRating,
+                        @Parameter(description = "Search by name, code, or email") @RequestParam(required = false) String search,
+                        @PageableDefault(size = 20, sort = "name", direction = Sort.Direction.ASC) Pageable pageable) {
 
-        log.info("GET /api/suppliers - Fetching suppliers with filters");
+                log.info("GET /api/v1/suppliers - Fetching suppliers with filters");
 
-        Page<SupplierDTO> suppliers = supplierService.getAllSuppliers(
-                isActive, country, minRating, maxRating, search, pageable);
+                Page<SupplierDTO> suppliers = supplierService.getAllSuppliers(
+                                isActive, country, minRating, maxRating, search, pageable);
 
-        return ResponseEntity.ok(suppliers);
-    }
+                return ResponseEntity.ok(
+                                ApiResponseWpp.success(suppliers, "Suppliers retrieved successfully"));
+        }
 
-    /**
-     * Get supplier by ID
-     */
-    @Operation(summary = "Get supplier by ID", description = "Retrieve detailed information about a specific supplier")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Supplier found", content = @Content(schema = @Schema(implementation = SupplierDTO.class))),
-            @ApiResponse(responseCode = "404", description = "Supplier not found", content = @Content),
-            @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
-    })
-    @GetMapping("/{id}")
-    public ResponseEntity<SupplierDTO> getSupplierById(
-            @Parameter(description = "Supplier ID", required = true) @PathVariable Long id) {
+        /**
+         * Get supplier by ID
+         */
+        @Operation(summary = "Get supplier by ID", description = "Retrieve detailed information about a specific supplier")
+        @ApiResponses(value = {
+                        @ApiResponse(responseCode = "200", description = "Supplier found", content = @Content(schema = @Schema(implementation = ApiResponseWpp.class))),
+                        @ApiResponse(responseCode = "404", description = "Supplier not found", content = @Content),
+                        @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
+        })
+        @GetMapping("/{id}")
+        public ResponseEntity<ApiResponseWpp<SupplierDTO>> getSupplierById(
+                        @Parameter(description = "Supplier ID", required = true) @PathVariable Long id) {
 
-        log.info("GET /api/suppliers/{} - Fetching supplier", id);
+                log.info("GET /api/v1/suppliers/{} - Fetching supplier", id);
 
-        SupplierDTO supplier = supplierService.getSupplierById(id);
-        return ResponseEntity.ok(supplier);
-    }
+                SupplierDTO supplier = supplierService.getSupplierById(id);
 
-    /**
-     * Get supplier by code
-     */
-    @Operation(summary = "Get supplier by code", description = "Retrieve supplier information using the unique supplier code")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Supplier found", content = @Content(schema = @Schema(implementation = SupplierDTO.class))),
-            @ApiResponse(responseCode = "404", description = "Supplier not found", content = @Content),
-            @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
-    })
-    @GetMapping("/code/{code}")
-    public ResponseEntity<SupplierDTO> getSupplierByCode(
-            @Parameter(description = "Supplier code", required = true) @PathVariable String code) {
+                return ResponseEntity.ok(
+                                ApiResponseWpp.success(supplier, "Supplier retrieved successfully"));
+        }
 
-        log.info("GET /api/suppliers/code/{} - Fetching supplier by code", code);
+        /**
+         * Get supplier by code
+         */
+        @Operation(summary = "Get supplier by code", description = "Retrieve supplier information using the unique supplier code")
+        @ApiResponses(value = {
+                        @ApiResponse(responseCode = "200", description = "Supplier found", content = @Content(schema = @Schema(implementation = ApiResponseWpp.class))),
+                        @ApiResponse(responseCode = "404", description = "Supplier not found", content = @Content),
+                        @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
+        })
+        @GetMapping("/code/{code}")
+        public ResponseEntity<ApiResponseWpp<SupplierDTO>> getSupplierByCode(
+                        @Parameter(description = "Supplier code", required = true) @PathVariable String code) {
 
-        SupplierDTO supplier = supplierService.getSupplierByCode(code);
-        return ResponseEntity.ok(supplier);
-    }
+                log.info("GET /api/v1/suppliers/code/{} - Fetching supplier by code", code);
 
-    /**
-     * Create a new supplier
-     */
-    @Operation(summary = "Create a new supplier", description = "Add a new supplier to the system")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "201", description = "Supplier created successfully", content = @Content(schema = @Schema(implementation = SupplierDTO.class))),
-            @ApiResponse(responseCode = "400", description = "Invalid input or duplicate code/email", content = @Content),
-            @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
-    })
-    @PostMapping
-    public ResponseEntity<SupplierDTO> createSupplier(
-            @Parameter(description = "Supplier data", required = true) @Valid @RequestBody SupplierDTO supplierDTO) {
+                SupplierDTO supplier = supplierService.getSupplierByCode(code);
 
-        log.info("POST /api/suppliers - Creating new supplier with code: {}", supplierDTO.getCode());
+                return ResponseEntity.ok(
+                                ApiResponseWpp.success(supplier, "Supplier retrieved successfully"));
+        }
 
-        SupplierDTO createdSupplier = supplierService.createSupplier(supplierDTO);
-        return ResponseEntity.status(HttpStatus.CREATED).body(createdSupplier);
-    }
+        /**
+         * Create a new supplier
+         */
+        @Operation(summary = "Create a new supplier", description = "Add a new supplier to the system")
+        @ApiResponses(value = {
+                        @ApiResponse(responseCode = "201", description = "Supplier created successfully", content = @Content(schema = @Schema(implementation = ApiResponseWpp.class))),
+                        @ApiResponse(responseCode = "400", description = "Invalid input or duplicate code/email", content = @Content),
+                        @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
+        })
+        @PostMapping
+        public ResponseEntity<ApiResponseWpp<SupplierDTO>> createSupplier(
+                        @Parameter(description = "Supplier data", required = true) @Valid @RequestBody SupplierDTO supplierDTO) {
 
-    /**
-     * Update supplier (full update)
-     */
-    @Operation(summary = "Update supplier", description = "Perform a full update of an existing supplier")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Supplier updated successfully", content = @Content(schema = @Schema(implementation = SupplierDTO.class))),
-            @ApiResponse(responseCode = "400", description = "Invalid input", content = @Content),
-            @ApiResponse(responseCode = "404", description = "Supplier not found", content = @Content),
-            @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
-    })
-    @PutMapping("/{id}")
-    public ResponseEntity<SupplierDTO> updateSupplier(
-            @Parameter(description = "Supplier ID", required = true) @PathVariable Long id,
-            @Parameter(description = "Updated supplier data", required = true) @Valid @RequestBody SupplierDTO supplierDTO) {
+                log.info("POST /api/v1/suppliers - Creating new supplier with code: {}", supplierDTO.getCode());
 
-        log.info("PUT /api/suppliers/{} - Updating supplier", id);
+                SupplierDTO createdSupplier = supplierService.createSupplier(supplierDTO);
 
-        SupplierDTO updatedSupplier = supplierService.updateSupplier(id, supplierDTO);
-        return ResponseEntity.ok(updatedSupplier);
-    }
+                return ResponseEntity
+                                .status(HttpStatus.CREATED)
+                                .body(ApiResponseWpp.success(
+                                                createdSupplier,
+                                                "Supplier created successfully with code: "
+                                                                + createdSupplier.getCode()));
+        }
 
-    /**
-     * Partial update supplier
-     */
-    @Operation(summary = "Partially update supplier", description = "Update specific fields of an existing supplier")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Supplier updated successfully", content = @Content(schema = @Schema(implementation = SupplierDTO.class))),
-            @ApiResponse(responseCode = "400", description = "Invalid input", content = @Content),
-            @ApiResponse(responseCode = "404", description = "Supplier not found", content = @Content),
-            @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
-    })
-    @PatchMapping("/{id}")
-    public ResponseEntity<SupplierDTO> patchSupplier(
-            @Parameter(description = "Supplier ID", required = true) @PathVariable Long id,
-            @Parameter(description = "Partial supplier data", required = true) @RequestBody SupplierDTO supplierDTO) {
+        /**
+         * Update supplier (full update)
+         */
+        @Operation(summary = "Update supplier", description = "Perform a full update of an existing supplier")
+        @ApiResponses(value = {
+                        @ApiResponse(responseCode = "200", description = "Supplier updated successfully", content = @Content(schema = @Schema(implementation = ApiResponseWpp.class))),
+                        @ApiResponse(responseCode = "400", description = "Invalid input", content = @Content),
+                        @ApiResponse(responseCode = "404", description = "Supplier not found", content = @Content),
+                        @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
+        })
+        @PutMapping("/{id}")
+        public ResponseEntity<ApiResponseWpp<SupplierDTO>> updateSupplier(
+                        @Parameter(description = "Supplier ID", required = true) @PathVariable Long id,
+                        @Parameter(description = "Updated supplier data", required = true) @Valid @RequestBody SupplierDTO supplierDTO) {
 
-        log.info("PATCH /api/suppliers/{} - Partially updating supplier", id);
+                log.info("PUT /api/v1/suppliers/{} - Updating supplier", id);
 
-        SupplierDTO updatedSupplier = supplierService.patchSupplier(id, supplierDTO);
-        return ResponseEntity.ok(updatedSupplier);
-    }
+                SupplierDTO updatedSupplier = supplierService.updateSupplier(id, supplierDTO);
 
-    /**
-     * Soft delete supplier (deactivate)
-     */
-    @Operation(summary = "Delete supplier", description = "Soft delete a supplier by setting isActive to false. Cannot delete suppliers with pending orders.")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "204", description = "Supplier deleted successfully", content = @Content),
-            @ApiResponse(responseCode = "404", description = "Supplier not found", content = @Content),
-            @ApiResponse(responseCode = "409", description = "Cannot delete supplier with pending orders", content = @Content),
-            @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
-    })
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteSupplier(
-            @Parameter(description = "Supplier ID", required = true) @PathVariable Long id) {
+                return ResponseEntity.ok(
+                                ApiResponseWpp.success(updatedSupplier, "Supplier updated successfully"));
+        }
 
-        log.info("DELETE /api/suppliers/{} - Soft deleting supplier", id);
+        /**
+         * Partial update supplier
+         */
+        @Operation(summary = "Partially update supplier", description = "Update specific fields of an existing supplier")
+        @ApiResponses(value = {
+                        @ApiResponse(responseCode = "200", description = "Supplier updated successfully", content = @Content(schema = @Schema(implementation = ApiResponseWpp.class))),
+                        @ApiResponse(responseCode = "400", description = "Invalid input", content = @Content),
+                        @ApiResponse(responseCode = "404", description = "Supplier not found", content = @Content),
+                        @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
+        })
+        @PatchMapping("/{id}")
+        public ResponseEntity<ApiResponseWpp<SupplierDTO>> patchSupplier(
+                        @Parameter(description = "Supplier ID", required = true) @PathVariable Long id,
+                        @Parameter(description = "Partial supplier data", required = true) @RequestBody SupplierDTO supplierDTO) {
 
-        supplierService.deleteSupplier(id);
-        return ResponseEntity.noContent().build();
-    }
+                log.info("PATCH /api/v1/suppliers/{} - Partially updating supplier", id);
 
-    /**
-     * Get top-rated suppliers
-     */
-    @Operation(summary = "Get top-rated suppliers", description = "Retrieve suppliers ordered by rating (highest first)")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Successfully retrieved top-rated suppliers", content = @Content(schema = @Schema(implementation = Page.class))),
-            @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
-    })
-    @GetMapping("/top-rated")
-    public ResponseEntity<Page<SupplierDTO>> getTopRatedSuppliers(
-            @PageableDefault(size = 10, sort = "rating", direction = Sort.Direction.DESC) Pageable pageable) {
+                SupplierDTO updatedSupplier = supplierService.patchSupplier(id, supplierDTO);
 
-        log.info("GET /api/suppliers/top-rated - Fetching top-rated suppliers");
+                return ResponseEntity.ok(
+                                ApiResponseWpp.success(updatedSupplier, "Supplier updated successfully"));
+        }
 
-        Page<SupplierDTO> suppliers = supplierService.getTopRatedSuppliers(pageable);
-        return ResponseEntity.ok(suppliers);
-    }
+        /**
+         * Soft delete supplier (deactivate)
+         */
+        @Operation(summary = "Delete supplier", description = "Soft delete a supplier by setting isActive to false. Cannot delete suppliers with pending orders.")
+        @ApiResponses(value = {
+                        @ApiResponse(responseCode = "200", description = "Supplier deleted successfully", content = @Content(schema = @Schema(implementation = ApiResponseWpp.class))),
+                        @ApiResponse(responseCode = "404", description = "Supplier not found", content = @Content),
+                        @ApiResponse(responseCode = "409", description = "Cannot delete supplier with pending orders", content = @Content),
+                        @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
+        })
+        @DeleteMapping("/{id}")
+        public ResponseEntity<ApiResponseWpp<Void>> deleteSupplier(
+                        @Parameter(description = "Supplier ID", required = true) @PathVariable Long id) {
 
-    /**
-     * Search suppliers
-     */
-    @Operation(summary = "Search suppliers", description = "Search suppliers by name, code, or email")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Search completed successfully", content = @Content(schema = @Schema(implementation = Page.class))),
-            @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
-    })
-    @GetMapping("/search")
-    public ResponseEntity<Page<SupplierDTO>> searchSuppliers(
-            @Parameter(description = "Search term", required = true) @RequestParam String term,
-            @PageableDefault(size = 20, sort = "name", direction = Sort.Direction.ASC) Pageable pageable) {
+                log.info("DELETE /api/v1/suppliers/{} - Soft deleting supplier", id);
 
-        log.info("GET /api/suppliers/search?term={} - Searching suppliers", term);
+                supplierService.deleteSupplier(id);
 
-        Page<SupplierDTO> suppliers = supplierService.searchSuppliers(term, pageable);
-        return ResponseEntity.ok(suppliers);
-    }
+                return ResponseEntity.ok(
+                                ApiResponseWpp.success(null, "Supplier deactivated successfully"));
+        }
 
-    /**
-     * Get active supplier count
-     */
-    @Operation(summary = "Get active supplier count", description = "Get the total number of active suppliers")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Count retrieved successfully", content = @Content),
-            @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
-    })
-    @GetMapping("/count/active")
-    public ResponseEntity<Long> getActiveSupplierCount() {
+        /**
+         * Get top-rated suppliers
+         */
+        @Operation(summary = "Get top-rated suppliers", description = "Retrieve suppliers ordered by rating (highest first)")
+        @ApiResponses(value = {
+                        @ApiResponse(responseCode = "200", description = "Successfully retrieved top-rated suppliers", content = @Content(schema = @Schema(implementation = ApiResponseWpp.class))),
+                        @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
+        })
+        @GetMapping("/top-rated")
+        public ResponseEntity<ApiResponseWpp<Page<SupplierDTO>>> getTopRatedSuppliers(
+                        @PageableDefault(size = 10, sort = "rating", direction = Sort.Direction.DESC) Pageable pageable) {
 
-        log.info("GET /api/suppliers/count/active - Getting active supplier count");
+                log.info("GET /api/v1/suppliers/top-rated - Fetching top-rated suppliers");
 
-        Long count = supplierService.getActiveSupplierCount();
-        return ResponseEntity.ok(count);
-    }
+                Page<SupplierDTO> suppliers = supplierService.getTopRatedSuppliers(pageable);
 
-    // Note: Additional endpoints for orders and performance metrics would be
-    // implemented here
-    // These require PurchaseOrder entity and repository to be implemented first
-    // GET /api/v1/suppliers/{id}/orders
-    // GET /api/v1/suppliers/{id}/performance
+                return ResponseEntity.ok(
+                                ApiResponseWpp.success(suppliers, "Top-rated suppliers retrieved successfully"));
+        }
+
+        /**
+         * Search suppliers
+         */
+        @Operation(summary = "Search suppliers", description = "Search suppliers by name, code, or email")
+        @ApiResponses(value = {
+                        @ApiResponse(responseCode = "200", description = "Search completed successfully", content = @Content(schema = @Schema(implementation = ApiResponseWpp.class))),
+                        @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
+        })
+        @GetMapping("/search")
+        public ResponseEntity<ApiResponseWpp<Page<SupplierDTO>>> searchSuppliers(
+                        @Parameter(description = "Search term", required = true) @RequestParam String term,
+                        @PageableDefault(size = 20, sort = "name", direction = Sort.Direction.ASC) Pageable pageable) {
+
+                log.info("GET /api/v1/suppliers/search?term={} - Searching suppliers", term);
+
+                Page<SupplierDTO> suppliers = supplierService.searchSuppliers(term, pageable);
+
+                return ResponseEntity.ok(
+                                ApiResponseWpp.success(suppliers, "Search completed successfully"));
+        }
+
+        /**
+         * Get active supplier count
+         */
+        @Operation(summary = "Get active supplier count", description = "Get the total number of active suppliers")
+        @ApiResponses(value = {
+                        @ApiResponse(responseCode = "200", description = "Count retrieved successfully", content = @Content(schema = @Schema(implementation = ApiResponseWpp.class))),
+                        @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
+        })
+        @GetMapping("/count/active")
+        public ResponseEntity<ApiResponseWpp<Long>> getActiveSupplierCount() {
+
+                log.info("GET /api/v1/suppliers/count/active - Getting active supplier count");
+
+                Long count = supplierService.getActiveSupplierCount();
+
+                return ResponseEntity.ok(
+                                ApiResponseWpp.success(count, "Active supplier count retrieved successfully"));
+        }
+
+        /**
+         * Get supplier's purchase orders
+         */
+        @Operation(summary = "Get supplier's purchase orders", description = "Retrieve all purchase orders from a specific supplier with optional filters for status and date range")
+        @ApiResponses(value = {
+                        @ApiResponse(responseCode = "200", description = "Purchase orders retrieved successfully", content = @Content(schema = @Schema(implementation = ApiResponseWpp.class))),
+                        @ApiResponse(responseCode = "404", description = "Supplier not found", content = @Content),
+                        @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
+        })
+        @GetMapping("/{id}/orders")
+        public ResponseEntity<ApiResponseWpp<Page<PurchaseOrderResponse>>> getSupplierOrders(
+                        @Parameter(description = "Supplier ID", required = true) @PathVariable Long id,
+                        @Parameter(description = "Filter by order status") @RequestParam(required = false) PurchaseOrderStatus status,
+                        @Parameter(description = "Start date for order date range (YYYY-MM-DD)") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+                        @Parameter(description = "End date for order date range (YYYY-MM-DD)") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+                        @PageableDefault(size = 20, sort = "orderDate", direction = Sort.Direction.DESC) Pageable pageable) {
+
+                log.info("GET /api/v1/suppliers/{}/orders - Fetching purchase orders", id);
+
+                Page<PurchaseOrderResponse> orders = supplierService.getSupplierOrders(
+                                id, status, startDate, endDate, pageable);
+
+                return ResponseEntity.ok(
+                                ApiResponseWpp.success(orders, "Purchase orders retrieved successfully"));
+        }
+
+        /**
+         * Get supplier performance metrics
+         */
+        @Operation(summary = "Get supplier performance metrics", description = "Retrieve comprehensive performance metrics for a supplier including order statistics, delivery performance, and recommendations")
+        @ApiResponses(value = {
+                        @ApiResponse(responseCode = "200", description = "Performance metrics retrieved successfully", content = @Content(schema = @Schema(implementation = ApiResponseWpp.class))),
+                        @ApiResponse(responseCode = "404", description = "Supplier not found", content = @Content),
+                        @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
+        })
+        @GetMapping("/{id}/performance")
+        public ResponseEntity<ApiResponseWpp<SupplierPerformanceDTO>> getSupplierPerformance(
+                        @Parameter(description = "Supplier ID", required = true) @PathVariable Long id) {
+
+                log.info("GET /api/v1/suppliers/{}/performance - Fetching performance metrics", id);
+
+                SupplierPerformanceDTO performance = supplierService.getSupplierPerformance(id);
+
+                return ResponseEntity.ok(
+                                ApiResponseWpp.success(performance, "Performance metrics retrieved successfully"));
+        }
 }
