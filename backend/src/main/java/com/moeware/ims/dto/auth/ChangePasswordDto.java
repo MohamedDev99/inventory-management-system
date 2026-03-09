@@ -9,7 +9,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * DTO for password change request
+ * DTO for authenticated user's self-service password change.
+ * Accessible via {@code POST /api/users/{id}/change-password}.
  *
  * @author MoeWare Team
  */

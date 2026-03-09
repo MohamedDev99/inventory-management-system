@@ -17,9 +17,10 @@ import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 
 /**
- * Service for JWT token operations
+ * Service for JWT token generation, parsing, and validation.
  *
  * @author MoeWare Team
+ * @version 1.1
  */
 @Service
 public class JwtService {
@@ -33,49 +34,58 @@ public class JwtService {
     @Value("${jwt.refresh-expiration}")
     private long refreshExpiration;
 
-    /**
-     * Extract username from token
-     */
+    // ==========================================
+    // Public API
+    // ==========================================
+
+    /** Extract username (subject) from token */
     public String extractUsername(String token) {
         return extractClaim(token, Claims::getSubject);
     }
 
-    /**
-     * Extract a specific claim from token
-     */
+    /** Extract the token expiration date */
+    public Date extractExpiration(String token) {
+        return extractClaim(token, Claims::getExpiration);
+    }
+
+    /** Extract a specific claim using a resolver function */
     public <T> T extractClaim(String token, Function<Claims, T> claimsResolver) {
         final Claims claims = extractAllClaims(token);
         return claimsResolver.apply(claims);
     }
 
-    /**
-     * Generate token with user details
-     */
+    /** Generate an access token with default claims */
     public String generateToken(UserDetails userDetails) {
         return generateToken(new HashMap<>(), userDetails);
     }
 
-    /**
-     * Generate token with extra claims
-     */
+    /** Generate an access token with extra claims */
     public String generateToken(Map<String, Object> extraClaims, UserDetails userDetails) {
         return buildToken(extraClaims, userDetails, jwtExpiration);
     }
 
-    /**
-     * Generate refresh token
-     */
+    /** Generate a refresh token */
     public String generateRefreshToken(UserDetails userDetails) {
         return buildToken(new HashMap<>(), userDetails, refreshExpiration);
     }
 
     /**
-     * Build JWT token
+     * Validate that the token belongs to the given user and has not expired.
+     *
+     * @param token       raw JWT string
+     * @param userDetails the user to validate against
+     * @return {@code true} if valid
      */
-    private String buildToken(
-            Map<String, Object> extraClaims,
-            UserDetails userDetails,
-            long expiration) {
+    public boolean isTokenValid(String token, UserDetails userDetails) {
+        final String username = extractUsername(token);
+        return username.equals(userDetails.getUsername()) && !isTokenExpired(token);
+    }
+
+    // ==========================================
+    // Private Helpers
+    // ==========================================
+
+    private String buildToken(Map<String, Object> extraClaims, UserDetails userDetails, long expiration) {
         return Jwts.builder()
                 .claims()
                 .add(extraClaims)
@@ -87,42 +97,18 @@ public class JwtService {
                 .compact();
     }
 
-    /**
-     * Validate token
-     */
-    public boolean isTokenValid(String token, UserDetails userDetails) {
-        final String username = extractUsername(token);
-        return (username.equals(userDetails.getUsername())) && !isTokenExpired(token);
-    }
-
-    /**
-     * Check if token is expired
-     */
     private boolean isTokenExpired(String token) {
         return extractExpiration(token).before(new Date());
     }
 
-    /**
-     * Extract expiration date from token
-     */
-    private Date extractExpiration(String token) {
-        return extractClaim(token, Claims::getExpiration);
-    }
-
-    /**
-     * Extract all claims from token
-     */
     private Claims extractAllClaims(String token) {
         return Jwts.parser()
-                .verifyWith(getSignInKey()) // Use verifyWith(SecretKey) for type safety
+                .verifyWith(getSignInKey())
                 .build()
-                .parseSignedClaims(token) // Use parseSignedClaims(token)
-                .getPayload(); // Use getPayload() instead of getBody()
+                .parseSignedClaims(token)
+                .getPayload();
     }
 
-    /**
-     * Get signing key
-     */
     private SecretKey getSignInKey() {
         byte[] keyBytes = secretKey.getBytes(StandardCharsets.UTF_8);
         return Keys.hmacShaKeyFor(keyBytes);
