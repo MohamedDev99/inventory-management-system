@@ -5,6 +5,15 @@
 -- Description: Initial schema for authentication with optimistic locking
 -- =========================================
 
+-- ============================================================
+-- Migration: V2 - Add account lockout fields to users table
+-- Author:    MoeWare Team
+-- Date:      2026-02-22
+-- Description:
+--   Adds failed_login_attempts and locked_until columns to support
+--   persistent account lockout after repeated failed login attempts.
+-- ============================================================
+
 -- Create ROLES table
 CREATE TABLE roles (
     id BIGSERIAL PRIMARY KEY,
@@ -61,6 +70,8 @@ CREATE TABLE users (
     role_id BIGINT NOT NULL,
     is_active BOOLEAN NOT NULL DEFAULT true,
     last_login TIMESTAMP,
+    failed_login_attempts INTEGER NOT NULL DEFAULT 0,
+    locked_until TIMESTAMP WITHOUT TIME ZONE NULL,
     version BIGINT NOT NULL DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -81,6 +92,10 @@ CREATE INDEX idx_users_email ON users (email);
 CREATE INDEX idx_users_role_id ON users (role_id);
 
 CREATE INDEX idx_users_is_active_role ON users (is_active, role_id);
+
+-- Index to efficiently query locked/unlocked accounts
+CREATE INDEX idx_users_locked_until ON users (locked_until)
+    WHERE locked_until IS NOT NULL;
 
 -- Partial index for active users only
 CREATE INDEX idx_users_active_only ON users (id)
@@ -116,3 +131,9 @@ COMMENT ON COLUMN users.version IS 'Optimistic lock version for preventing concu
 COMMENT ON COLUMN users.created_by IS 'Username of the user who created this record';
 
 COMMENT ON COLUMN users.updated_by IS 'Username of the user who last updated this record';
+
+COMMENT ON COLUMN users.failed_login_attempts IS
+    'Number of consecutive failed login attempts. Resets to 0 on successful login.';
+
+COMMENT ON COLUMN users.locked_until IS
+    'If not null and in the future, the account is temporarily locked. Cleared on successful login.';

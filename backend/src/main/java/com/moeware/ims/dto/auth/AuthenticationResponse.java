@@ -9,30 +9,38 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * DTO for authentication response containing JWT tokens
+ * Response returned after successful authentication (login, register, token
+ * refresh).
+ *
+ * <p>
+ * JWT tokens are <b>not</b> included in the JSON body — they are delivered as
+ * HttpOnly cookies ({@code access_token} and {@code refresh_token}) set
+ * directly
+ * on the HTTP response. This prevents JavaScript from accessing the tokens,
+ * protecting against XSS attacks.
+ * </p>
+ *
+ * <p>
+ * This response body contains only non-sensitive metadata the frontend
+ * needs to render the UI immediately after login.
+ * </p>
  *
  * @author MoeWare Team
+ * @version 1.1
  */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@Schema(description = "Authentication response with JWT tokens and user information")
+@Schema(description = "Authentication success response. JWT tokens are delivered via HttpOnly cookies, not in this body.")
 public class AuthenticationResponse {
 
-    @Schema(description = "JWT access token for API authentication", example = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJqb2huZG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c")
-    private String accessToken;
+    @Schema(description = "Token type — always 'Bearer' (informational)", example = "Bearer")
+    private String tokenType;
 
-    @Schema(description = "JWT refresh token for obtaining new access tokens", example = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJqb2huZG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.dummyRefreshToken")
-    private String refreshToken;
+    @Schema(description = "Access token expiry in seconds (informational — actual expiry enforced server-side)", example = "86400")
+    private Long expiresIn;
 
-    @Schema(description = "Token type (always 'Bearer')", example = "Bearer")
-    @Builder.Default
-    private String tokenType = "Bearer";
-
-    @Schema(description = "Token expiration time in seconds", example = "86400")
-    private Long expiresIn;// in seconds
-
-    @Schema(description = "Authenticated user information")
+    @Schema(description = "Authenticated user's profile information")
     private UserResponseDto user;
 }

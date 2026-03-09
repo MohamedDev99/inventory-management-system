@@ -1,17 +1,16 @@
 package com.moeware.ims.controller;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -22,14 +21,15 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.moeware.ims.dto.ApiResponseWpp;
 import com.moeware.ims.dto.auth.ChangePasswordDto;
+import com.moeware.ims.dto.user.UserRegistrationDto;
 import com.moeware.ims.dto.user.UserResponseDto;
 import com.moeware.ims.dto.user.UserUpdateDto;
 import com.moeware.ims.exception.GlobalExceptionHandler;
+import com.moeware.ims.exception.auth.InvalidCredentialsException;
 import com.moeware.ims.service.UserService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.Parameters;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -41,7 +41,19 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * REST controller for user management operations
+ * REST controller for User management.
+ *
+ * <p>
+ * <b>Role access matrix:</b>
+ * </p>
+ * <ul>
+ * <li>ADMIN – full access (create, read, update, delete, activate, deactivate,
+ * statistics)</li>
+ * <li>MANAGER – read all users, update their own profile, change own
+ * password</li>
+ * <li>WAREHOUSE_STAFF – read their own profile, change own password</li>
+ * <li>VIEWER – read their own profile</li>
+ * </ul>
  *
  * @author MoeWare Team
  * @version 1.0
@@ -51,253 +63,224 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 @Slf4j
 @CrossOrigin(origins = "${app.cors.allowed-origins}")
-@Tag(name = "User Management", description = "User management APIs for CRUD operations, password changes, and user statistics")
+@Tag(name = "Users", description = "User management APIs — CRUD, role management, and account status control")
 @SecurityRequirement(name = "bearerAuth")
 public class UserController {
 
-        @Autowired
-        private final PasswordEncoder passwordEncoder;
-
         private final UserService userService;
 
-        /**
-         * Get all active users with pagination
-         * GET /api/users
-         * Requires ADMIN or MANAGER role
-         */
-        @Operation(summary = "Get all active users", description = "Retrieve a paginated list of all active users. Requires ADMIN or MANAGER role.")
-        @ApiResponses(value = {
-                        @ApiResponse(responseCode = "200", description = "Users retrieved successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = Page.class))),
-                        @ApiResponse(responseCode = "403", description = "Forbidden - Insufficient permissions", content = @Content(mediaType = "application/json", schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class)))
+        // ==========================================
+        // Create User (ADMIN only)
+        // ==========================================
+
+        @Operation(summary = "Create a new user", description = "Register a new user with a specified role. Only ADMIN can create users this way. "
+                        + "For self-registration use POST /api/auth/register.")
+        @ApiResponses({
+                        @ApiResponse(responseCode = "201", description = "User created successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = UserResponseDto.class))),
+                        @ApiResponse(responseCode = "400", description = "Validation error", content = @Content(mediaType = "application/json", schema = @Schema(implementation = GlobalExceptionHandler.ValidationErrorResponse.class))),
+                        @ApiResponse(responseCode = "403", description = "Forbidden — ADMIN role required"),
+                        @ApiResponse(responseCode = "409", description = "Username or email already exists", content = @Content(mediaType = "application/json", schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class)))
         })
-        @Parameters({
-                        @Parameter(name = "page", description = "Page number (0-indexed)", example = "0"),
-                        @Parameter(name = "size", description = "Number of items per page", example = "10"),
-                        @Parameter(name = "sortBy", description = "Field to sort by", example = "createdAt"),
-                        @Parameter(name = "direction", description = "Sort direction (ASC or DESC)", example = "DESC")
-        })
-        @GetMapping
-        @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
-        public ResponseEntity<ApiResponseWpp<Page<UserResponseDto>>> getAllUsers(
-                        @RequestParam(defaultValue = "0") int page,
-                        @RequestParam(defaultValue = "10") int size,
-                        @RequestParam(defaultValue = "createdAt") String sortBy,
-                        @RequestParam(defaultValue = "DESC") String direction) {
-
-                log.info("Get all users request - page: {}, size: {}", page, size);
-
-                Sort.Direction sortDirection = parseSortDirection(direction);
-                Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, sortBy));
-
-                Page<UserResponseDto> users = userService.getAllActiveUsers(pageable);
-
-                return ResponseEntity.ok(
-                                ApiResponseWpp.success(users, "Users retrieved successfully"));
-        }
-
-        /**
-         * Search users by username or email
-         * GET /api/users/search
-         * Requires ADMIN or MANAGER role
-         */
-        @Operation(summary = "Search users", description = "Search users by username or email with pagination. Requires ADMIN or MANAGER role.")
-        @ApiResponses(value = {
-                        @ApiResponse(responseCode = "200", description = "Search completed successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = Page.class))),
-                        @ApiResponse(responseCode = "403", description = "Forbidden - Insufficient permissions")
-        })
-        @Parameters({
-                        @Parameter(name = "query", description = "Search term for username or email", required = true, example = "john"),
-                        @Parameter(name = "page", description = "Page number (0-indexed)", example = "0"),
-                        @Parameter(name = "size", description = "Number of items per page", example = "10")
-        })
-        @GetMapping("/search")
-        @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
-        public ResponseEntity<ApiResponseWpp<Page<UserResponseDto>>> searchUsers(
-                        @RequestParam String query,
-                        @RequestParam(defaultValue = "0") int page,
-                        @RequestParam(defaultValue = "10") int size) {
-
-                log.info("Search users request - query: {}", query);
-
-                Pageable pageable = PageRequest.of(page, size);
-                Page<UserResponseDto> users = userService.searchUsers(query, pageable);
-
-                return ResponseEntity.ok(
-                                ApiResponseWpp.success(users, "Search completed"));
-        }
-
-        /**
-         * Get user by ID
-         * GET /api/users/{id}
-         * Requires ADMIN or MANAGER role
-         */
-        @Operation(summary = "Get user by ID", description = "Retrieve detailed information about a specific user by their ID. Requires ADMIN or MANAGER role.")
-        @ApiResponses(value = {
-                        @ApiResponse(responseCode = "200", description = "User retrieved successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = UserResponseDto.class))),
-                        @ApiResponse(responseCode = "404", description = "User not found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class))),
-                        @ApiResponse(responseCode = "403", description = "Forbidden - Insufficient permissions")
-        })
-        @Parameter(name = "id", description = "User ID", required = true, example = "1")
-        @GetMapping("/{id}")
-        @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
-        public ResponseEntity<ApiResponseWpp<UserResponseDto>> getUserById(@PathVariable Long id) {
-                log.info("Get user by id request - id: {}", id);
-
-                UserResponseDto user = userService.getUserById(id);
-
-                return ResponseEntity.ok(
-                                ApiResponseWpp.success(user, "User retrieved successfully"));
-        }
-
-        /**
-         * Update user information
-         * PUT /api/users/{id}
-         * Requires ADMIN role
-         */
-        @Operation(summary = "Update user information", description = "Update user's email or role. Requires ADMIN role.")
-        @ApiResponses(value = {
-                        @ApiResponse(responseCode = "200", description = "User updated successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = UserResponseDto.class))),
-                        @ApiResponse(responseCode = "404", description = "User not found"),
-                        @ApiResponse(responseCode = "409", description = "Email already exists"),
-                        @ApiResponse(responseCode = "403", description = "Forbidden - Requires ADMIN role")
-        })
-        @Parameter(name = "id", description = "User ID to update", required = true, example = "1")
-        @PutMapping("/{id}")
         @PreAuthorize("hasRole('ADMIN')")
-        public ResponseEntity<ApiResponseWpp<UserResponseDto>> updateUser(
-                        @PathVariable Long id,
-                        @Valid @RequestBody UserUpdateDto updateDto) {
+        @PostMapping
+        public ResponseEntity<ApiResponseWpp<UserResponseDto>> createUser(
+                        @Valid @RequestBody UserRegistrationDto request) {
 
-                log.info("Update user request - id: {}", id);
-
-                UserResponseDto user = userService.updateUser(id, updateDto);
-
-                return ResponseEntity.ok(
-                                ApiResponseWpp.success(user, "User updated successfully"));
+                log.info("Admin creating user: {}", request.getUsername());
+                UserResponseDto user = userService.registerUser(request);
+                return ResponseEntity.status(HttpStatus.CREATED)
+                                .body(ApiResponseWpp.success(user, "User created successfully"));
         }
 
-        /**
-         * Change user password
-         * POST /api/users/{id}/change-password
-         * Users can change their own password, ADMIN can change any
-         */
-        @Operation(summary = "Change user password", description = "Change password for a user. Users can change their own password, ADMIN can change any user's password.")
-        @ApiResponses(value = {
-                        @ApiResponse(responseCode = "200", description = "Password changed successfully"),
-                        @ApiResponse(responseCode = "400", description = "Passwords do not match or invalid input"),
-                        @ApiResponse(responseCode = "403", description = "Forbidden - Can only change own password unless ADMIN"),
+        // ==========================================
+        // Get All Users (ADMIN, MANAGER)
+        // ==========================================
+
+        @Operation(summary = "List all active users", description = "Returns a paginated list of all active users. Accessible by ADMIN and MANAGER.")
+        @ApiResponses({
+                        @ApiResponse(responseCode = "200", description = "Users retrieved successfully"),
+                        @ApiResponse(responseCode = "403", description = "Forbidden")
+        })
+        @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+        @GetMapping
+        public ResponseEntity<ApiResponseWpp<Page<UserResponseDto>>> getAllUsers(
+                        @PageableDefault(size = 20, sort = "id") Pageable pageable) {
+
+                log.info("List all active users, page: {}", pageable.getPageNumber());
+                Page<UserResponseDto> users = userService.getAllActiveUsers(pageable);
+                return ResponseEntity.ok(ApiResponseWpp.success(users, "Users retrieved successfully"));
+        }
+
+        // ==========================================
+        // Search Users (ADMIN, MANAGER)
+        // ==========================================
+
+        @Operation(summary = "Search users by username or email", description = "Case-insensitive search across username and email. Accessible by ADMIN and MANAGER.")
+        @ApiResponses({
+                        @ApiResponse(responseCode = "200", description = "Search results returned"),
+                        @ApiResponse(responseCode = "403", description = "Forbidden")
+        })
+        @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+        @GetMapping("/search")
+        public ResponseEntity<ApiResponseWpp<Page<UserResponseDto>>> searchUsers(
+                        @Parameter(description = "Search term (username or email)", example = "john") @RequestParam String q,
+                        @PageableDefault(size = 20) Pageable pageable) {
+
+                log.info("Search users with term: {}", q);
+                Page<UserResponseDto> results = userService.searchUsers(q, pageable);
+                return ResponseEntity.ok(ApiResponseWpp.success(results, "Search completed"));
+        }
+
+        // ==========================================
+        // Get User Statistics (ADMIN only)
+        // ==========================================
+
+        @Operation(summary = "Get user statistics", description = "Returns total users, active users, and counts per role. ADMIN only.")
+        @ApiResponses({
+                        @ApiResponse(responseCode = "200", description = "Statistics retrieved"),
+                        @ApiResponse(responseCode = "403", description = "Forbidden — ADMIN role required")
+        })
+        @PreAuthorize("hasRole('ADMIN')")
+        @GetMapping("/statistics")
+        public ResponseEntity<ApiResponseWpp<UserService.UserStatistics>> getStatistics() {
+                log.info("Get user statistics");
+                UserService.UserStatistics stats = userService.getStatistics();
+                return ResponseEntity.ok(ApiResponseWpp.success(stats, "Statistics retrieved"));
+        }
+
+        // ==========================================
+        // Get User by ID (ADMIN, MANAGER, or self)
+        // ==========================================
+
+        @Operation(summary = "Get user by ID", description = "Retrieve a specific user's details. "
+                        + "ADMIN and MANAGER can view any user; other roles can only view their own profile.")
+        @ApiResponses({
+                        @ApiResponse(responseCode = "200", description = "User found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = UserResponseDto.class))),
+                        @ApiResponse(responseCode = "403", description = "Forbidden"),
+                        @ApiResponse(responseCode = "404", description = "User not found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class)))
+        })
+        @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER') or @userSecurityService.isSelf(#id, authentication)")
+        @GetMapping("/{id}")
+        public ResponseEntity<ApiResponseWpp<UserResponseDto>> getUserById(
+                        @Parameter(description = "User ID", required = true, example = "1") @PathVariable Long id) {
+
+                log.info("Get user by id: {}", id);
+                UserResponseDto user = userService.getUserById(id);
+                return ResponseEntity.ok(ApiResponseWpp.success(user, "User retrieved successfully"));
+        }
+
+        // ==========================================
+        // Update User (ADMIN, or self for MANAGER)
+        // ==========================================
+
+        @Operation(summary = "Update user profile", description = "Update a user's email or role. "
+                        + "ADMIN can update any user (including role). "
+                        + "MANAGER can update their own profile (email only, role change requires ADMIN).")
+        @ApiResponses({
+                        @ApiResponse(responseCode = "200", description = "User updated successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = UserResponseDto.class))),
+                        @ApiResponse(responseCode = "400", description = "Validation error"),
+                        @ApiResponse(responseCode = "403", description = "Forbidden"),
                         @ApiResponse(responseCode = "404", description = "User not found")
         })
-        @Parameter(name = "id", description = "User ID", required = true, example = "1")
-        @PostMapping("/{id}/change-password")
-        public ResponseEntity<ApiResponseWpp<Void>> changePassword(
-                        @PathVariable Long id,
-                        @Valid @RequestBody ChangePasswordDto changePasswordDto,
+        @PreAuthorize("hasRole('ADMIN') or (hasRole('MANAGER') and @userSecurityService.isSelf(#id, authentication))")
+        @PutMapping("/{id}")
+        public ResponseEntity<ApiResponseWpp<UserResponseDto>> updateUser(
+                        @Parameter(description = "User ID", required = true, example = "1") @PathVariable Long id,
+                        @Valid @RequestBody UserUpdateDto updateDto,
                         Authentication authentication) {
 
-                log.info("Change password request - user id: {}", id);
+                log.info("Update user id: {} by {}", id, authentication.getName());
 
-                // Check if user is changing their own password or is admin
-                UserResponseDto currentUser = userService.getUserByUsername(authentication.getName());
+                // Non-ADMIN users cannot change roles
                 boolean isAdmin = authentication.getAuthorities().stream()
                                 .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
-
-                if (!currentUser.getId().equals(id) && !isAdmin) {
-                        return ResponseEntity.status(403).body(
-                                        ApiResponseWpp.error("You can only change your own password"));
+                if (!isAdmin && updateDto.getRoleName() != null) {
+                        throw new InvalidCredentialsException("Only ADMIN can change user roles");
                 }
 
-                // Verify passwords match
-                if (!changePasswordDto.passwordsMatch()) {
-                        return ResponseEntity.badRequest().body(
-                                        ApiResponseWpp.error("Passwords do not match"));
-                }
-
-                // Verify current password is correct
-                String userPasswordhash = userService.getUserPasswordHash(id);
-                if (!passwordEncoder.matches(changePasswordDto.getCurrentPassword(), userPasswordhash)) {
-                        return ResponseEntity.badRequest().body(
-                                        ApiResponseWpp.error("Current password is incorrect"));
-                }
-
-                userService.changePassword(id, changePasswordDto.getNewPassword());
-
-                return ResponseEntity.ok(
-                                ApiResponseWpp.success(null, "Password changed successfully"));
+                UserResponseDto updated = userService.updateUser(id, updateDto);
+                return ResponseEntity.ok(ApiResponseWpp.success(updated, "User updated successfully"));
         }
 
-        /**
-         * Deactivate user (soft delete)
-         * DELETE /api/users/{id}
-         * Requires ADMIN role
-         */
-        @Operation(summary = "Deactivate user", description = "Soft delete a user by setting their account to inactive. Requires ADMIN role.")
-        @ApiResponses(value = {
-                        @ApiResponse(responseCode = "200", description = "User deactivated successfully"),
-                        @ApiResponse(responseCode = "404", description = "User not found"),
-                        @ApiResponse(responseCode = "403", description = "Forbidden - Requires ADMIN role")
+        // ==========================================
+        // Change Own Password (authenticated users)
+        // ==========================================
+
+        @Operation(summary = "Change own password", description = "Allows any authenticated user to change their own password. "
+                        + "Requires the current password for verification.")
+        @ApiResponses({
+                        @ApiResponse(responseCode = "200", description = "Password changed successfully"),
+                        @ApiResponse(responseCode = "400", description = "Validation error or wrong current password"),
+                        @ApiResponse(responseCode = "403", description = "Forbidden — can only change own password")
         })
-        @Parameter(name = "id", description = "User ID to deactivate", required = true, example = "1")
+        @PreAuthorize("@userSecurityService.isSelf(#id, authentication)")
+        @PostMapping("/{id}/change-password")
+        public ResponseEntity<ApiResponseWpp<Void>> changePassword(
+                        @Parameter(description = "User ID", required = true, example = "1") @PathVariable Long id,
+                        @Valid @RequestBody ChangePasswordDto request) {
+
+                log.info("Change password request for user id: {}", id);
+                userService.changePasswordWithVerification(id, request.getCurrentPassword(), request.getNewPassword());
+                return ResponseEntity.ok(ApiResponseWpp.success(null, "Password changed successfully"));
+        }
+
+        // ==========================================
+        // Deactivate User / Soft Delete (ADMIN only)
+        // ==========================================
+
+        @Operation(summary = "Deactivate user", description = "Soft-delete a user by marking them inactive. The user can no longer log in. ADMIN only.")
+        @ApiResponses({
+                        @ApiResponse(responseCode = "200", description = "User deactivated"),
+                        @ApiResponse(responseCode = "403", description = "Forbidden — ADMIN role required"),
+                        @ApiResponse(responseCode = "404", description = "User not found")
+        })
+        @PreAuthorize("hasRole('ADMIN')")
         @DeleteMapping("/{id}")
-        @PreAuthorize("hasRole('ADMIN')")
-        public ResponseEntity<ApiResponseWpp<Void>> deactivateUser(@PathVariable Long id) {
-                log.info("Deactivate user request - id: {}", id);
+        public ResponseEntity<ApiResponseWpp<Void>> deactivateUser(
+                        @Parameter(description = "User ID", required = true, example = "1") @PathVariable Long id) {
 
+                log.info("Deactivate user id: {}", id);
                 userService.deactivateUser(id);
-
-                return ResponseEntity.ok(
-                                ApiResponseWpp.success(null, "User deactivated successfully"));
+                return ResponseEntity.ok(ApiResponseWpp.success(null, "User deactivated successfully"));
         }
 
-        /**
-         * Activate user
-         * POST /api/users/{id}/activate
-         * Requires ADMIN role
-         */
-        @Operation(summary = "Activate user", description = "Reactivate a previously deactivated user account. Requires ADMIN role.")
-        @ApiResponses(value = {
-                        @ApiResponse(responseCode = "200", description = "User activated successfully"),
-                        @ApiResponse(responseCode = "404", description = "User not found"),
-                        @ApiResponse(responseCode = "403", description = "Forbidden - Requires ADMIN role")
-        })
-        @Parameter(name = "id", description = "User ID to activate", required = true, example = "1")
-        @PostMapping("/{id}/activate")
-        @PreAuthorize("hasRole('ADMIN')")
-        public ResponseEntity<ApiResponseWpp<Void>> activateUser(@PathVariable Long id) {
-                log.info("Activate user request - id: {}", id);
+        // ==========================================
+        // Activate User (ADMIN only)
+        // ==========================================
 
+        @Operation(summary = "Activate user", description = "Re-activate a previously deactivated user. ADMIN only.")
+        @ApiResponses({
+                        @ApiResponse(responseCode = "200", description = "User activated"),
+                        @ApiResponse(responseCode = "403", description = "Forbidden — ADMIN role required"),
+                        @ApiResponse(responseCode = "404", description = "User not found")
+        })
+        @PreAuthorize("hasRole('ADMIN')")
+        @PatchMapping("/{id}/activate")
+        public ResponseEntity<ApiResponseWpp<Void>> activateUser(
+                        @Parameter(description = "User ID", required = true, example = "1") @PathVariable Long id) {
+
+                log.info("Activate user id: {}", id);
                 userService.activateUser(id);
-
-                return ResponseEntity.ok(
-                                ApiResponseWpp.success(null, "User activated successfully"));
+                return ResponseEntity.ok(ApiResponseWpp.success(null, "User activated successfully"));
         }
 
-        /**
-         * Get user statistics
-         * GET /api/users/statistics
-         * Requires ADMIN role
-         */
-        @Operation(summary = "Get user statistics", description = "Retrieve statistics about users including total count, active users, and counts by role. Requires ADMIN role.")
-        @ApiResponses(value = {
-                        @ApiResponse(responseCode = "200", description = "Statistics retrieved successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = UserService.UserStatistics.class))),
-                        @ApiResponse(responseCode = "403", description = "Forbidden - Requires ADMIN role")
+        // ==========================================
+        // Unlock User (ADMIN only)
+        // ==========================================
+
+        @Operation(summary = "Unlock user account", description = "Manually unlock a user account that was locked due to failed login attempts. ADMIN only.")
+        @ApiResponses({
+                        @ApiResponse(responseCode = "200", description = "User account unlocked"),
+                        @ApiResponse(responseCode = "403", description = "Forbidden — ADMIN role required"),
+                        @ApiResponse(responseCode = "404", description = "User not found")
         })
-        @GetMapping("/statistics")
         @PreAuthorize("hasRole('ADMIN')")
-        public ResponseEntity<ApiResponseWpp<UserService.UserStatistics>> getUserStatistics() {
-                log.info("Get user statistics request");
+        @PatchMapping("/{id}/unlock")
+        public ResponseEntity<ApiResponseWpp<Void>> unlockUser(
+                        @Parameter(description = "User ID", required = true, example = "1") @PathVariable Long id) {
 
-                UserService.UserStatistics statistics = userService.getStatistics();
-
-                return ResponseEntity.ok(
-                                ApiResponseWpp.success(statistics, "Statistics retrieved successfully"));
-        }
-
-        private Sort.Direction parseSortDirection(String direction) {
-                try {
-                        return Sort.Direction.fromString(direction);
-                } catch (IllegalArgumentException e) {
-                        return Sort.Direction.DESC; // Default fallback
-                }
+                log.info("Unlock user id: {}", id);
+                userService.unlockUser(id);
+                return ResponseEntity.ok(ApiResponseWpp.success(null, "User account unlocked successfully"));
         }
 }

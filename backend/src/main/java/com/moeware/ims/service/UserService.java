@@ -15,6 +15,7 @@ import com.moeware.ims.dto.user.UserUpdateDto;
 import com.moeware.ims.entity.Role;
 import com.moeware.ims.entity.User;
 import com.moeware.ims.exception.ResourceNotFoundException;
+import com.moeware.ims.exception.auth.InvalidCredentialsException;
 import com.moeware.ims.exception.user.UserAlreadyExistsException;
 import com.moeware.ims.repository.RoleRepository;
 import com.moeware.ims.repository.UserRepository;
@@ -23,10 +24,12 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Service for managing users
- * Also implements UserDetailsService for Spring Security
+ * Service for user management operations.
+ * Also implements {@link UserDetailsService} for Spring Security
+ * authentication.
  *
  * @author MoeWare Team
+ * @version 1.1
  */
 @Service
 @RequiredArgsConstructor
@@ -38,9 +41,10 @@ public class UserService implements UserDetailsService {
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
 
-    /**
-     * Load user by username (required by Spring Security)
-     */
+    // ==========================================
+    // Spring Security
+    // ==========================================
+
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
         log.debug("Loading user by username: {}", username);
@@ -48,30 +52,25 @@ public class UserService implements UserDetailsService {
                 .orElseThrow(() -> new UsernameNotFoundException("User not found: " + username));
     }
 
-    /**
-     * Register a new user
-     */
+    // ==========================================
+    // Registration
+    // ==========================================
+
     @Transactional
     public UserResponseDto registerUser(UserRegistrationDto registrationDto) {
         log.info("Registering new user: {}", registrationDto.getUsername());
 
-        // Check if username already exists
         if (userRepository.existsByUsername(registrationDto.getUsername())) {
             throw new UserAlreadyExistsException("Username already exists: " + registrationDto.getUsername());
         }
-
-        // Check if email already exists
         if (userRepository.existsByEmail(registrationDto.getEmail())) {
             throw new UserAlreadyExistsException("Email already exists: " + registrationDto.getEmail());
         }
 
-        // Get role (default to VIEWER if not specified)
         String roleName = registrationDto.getRoleName() != null ? registrationDto.getRoleName() : "VIEWER";
-
         Role role = roleRepository.findByName(roleName)
                 .orElseThrow(() -> new ResourceNotFoundException("Role not found: " + roleName));
 
-        // Create user entity
         User user = User.builder()
                 .username(registrationDto.getUsername())
                 .email(registrationDto.getEmail())
@@ -82,59 +81,45 @@ public class UserService implements UserDetailsService {
 
         User savedUser = userRepository.save(user);
         log.info("User registered successfully: {}", savedUser.getUsername());
-
         return UserResponseDto.fromEntity(savedUser);
     }
 
-    /**
-     * Get user by ID
-     */
+    // ==========================================
+    // Read Operations
+    // ==========================================
+
     public UserResponseDto getUserById(Long id) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
         return UserResponseDto.fromEntity(user);
     }
 
-    /**
-     * Get user passwordhash
-     *
-     * @param id
-     * @return
-     */
-    public String getUserPasswordHash(Long id) {
-        User user = userRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
-        return user.getPasswordHash();
-    }
-
-    /**
-     * Get user by username
-     */
     public UserResponseDto getUserByUsername(String username) {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found: " + username));
         return UserResponseDto.fromEntity(user);
     }
 
-    /**
-     * Get all active users with pagination
-     */
     public Page<UserResponseDto> getAllActiveUsers(Pageable pageable) {
         return userRepository.findByIsActiveTrue(pageable)
                 .map(UserResponseDto::fromEntity);
     }
 
-    /**
-     * Search users by username or email
-     */
     public Page<UserResponseDto> searchUsers(String searchTerm, Pageable pageable) {
         return userRepository.searchUsers(searchTerm, pageable)
                 .map(UserResponseDto::fromEntity);
     }
 
-    /**
-     * Update user information
-     */
+    public String getUserPasswordHash(Long id) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
+        return user.getPasswordHash();
+    }
+
+    // ==========================================
+    // Update Operations
+    // ==========================================
+
     @Transactional
     public UserResponseDto updateUser(Long id, UserUpdateDto updateDto) {
         log.info("Updating user with id: {}", id);
@@ -142,7 +127,6 @@ public class UserService implements UserDetailsService {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
 
-        // Update email if provided and different
         if (updateDto.getEmail() != null && !updateDto.getEmail().equals(user.getEmail())) {
             if (userRepository.existsByEmail(updateDto.getEmail())) {
                 throw new UserAlreadyExistsException("Email already exists: " + updateDto.getEmail());
@@ -150,7 +134,6 @@ public class UserService implements UserDetailsService {
             user.setEmail(updateDto.getEmail());
         }
 
-        // Update role if provided
         if (updateDto.getRoleName() != null) {
             Role role = roleRepository.findByName(updateDto.getRoleName())
                     .orElseThrow(() -> new ResourceNotFoundException("Role not found: " + updateDto.getRoleName()));
@@ -159,73 +142,99 @@ public class UserService implements UserDetailsService {
 
         User updatedUser = userRepository.save(user);
         log.info("User updated successfully: {}", updatedUser.getUsername());
-
         return UserResponseDto.fromEntity(updatedUser);
     }
 
+    // ==========================================
+    // Password Management
+    // ==========================================
+
     /**
-     * Change user password
+     * Admin-initiated password change (no current password required).
      */
     @Transactional
     public void changePassword(Long id, String newPassword) {
         log.info("Changing password for user id: {}", id);
-
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
 
         user.setPasswordHash(passwordEncoder.encode(newPassword));
         userRepository.save(user);
-
-        log.info("Password changed successfully for user: {}", user.getUsername());
+        log.info("Password changed for user: {}", user.getUsername());
     }
 
     /**
-     * Deactivate user (soft delete)
+     * Self-service password change — verifies the current password before applying
+     * the new one.
+     *
+     * @throws InvalidCredentialsException if currentPassword does not match the
+     *                                     stored hash
      */
+    @Transactional
+    public void changePasswordWithVerification(Long id, String currentPassword, String newPassword) {
+        log.info("Self-service password change for user id: {}", id);
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
+
+        if (!passwordEncoder.matches(currentPassword, user.getPasswordHash())) {
+            throw new InvalidCredentialsException("Current password is incorrect");
+        }
+
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
+        log.info("Password changed (verified) for user: {}", user.getUsername());
+    }
+
+    // ==========================================
+    // Account Status
+    // ==========================================
+
     @Transactional
     public void deactivateUser(Long id) {
         log.info("Deactivating user with id: {}", id);
-
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
-
         user.deactivate();
         userRepository.save(user);
-
-        log.info("User deactivated successfully: {}", user.getUsername());
+        log.info("User deactivated: {}", user.getUsername());
     }
 
-    /**
-     * Activate user
-     */
     @Transactional
     public void activateUser(Long id) {
         log.info("Activating user with id: {}", id);
-
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
-
         user.activate();
         userRepository.save(user);
-
-        log.info("User activated successfully: {}", user.getUsername());
+        log.info("User activated: {}", user.getUsername());
     }
 
     /**
-     * Update last login timestamp
+     * Manually unlock a user account locked by failed login attempts.
+     * Resets both the failed attempt counter and the lock timestamp.
      */
+    @Transactional
+    public void unlockUser(Long id) {
+        log.info("Unlocking user account id: {}", id);
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
+        user.resetFailedLoginAttempts();
+        userRepository.save(user);
+        log.info("User account unlocked: {}", user.getUsername());
+    }
+
     @Transactional
     public void updateLastLogin(String username) {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found: " + username));
-
         user.updateLastLogin();
         userRepository.save(user);
     }
 
-    /**
-     * Get user count statistics
-     */
+    // ==========================================
+    // Statistics
+    // ==========================================
+
     public UserStatistics getStatistics() {
         long totalUsers = userRepository.count();
         long activeUsers = userRepository.countByIsActiveTrue();
@@ -234,13 +243,9 @@ public class UserService implements UserDetailsService {
         long staffCount = userRepository.countByRoleName("WAREHOUSE_STAFF");
         long viewerCount = userRepository.countByRoleName("VIEWER");
 
-        return new UserStatistics(totalUsers, activeUsers, adminCount,
-                managerCount, staffCount, viewerCount);
+        return new UserStatistics(totalUsers, activeUsers, adminCount, managerCount, staffCount, viewerCount);
     }
 
-    /**
-     * Statistics record
-     */
     public record UserStatistics(
             long totalUsers,
             long activeUsers,

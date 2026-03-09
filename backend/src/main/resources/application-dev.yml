@@ -9,13 +9,30 @@ spring:
       connection-timeout: 30000
       minimum-idle: 2
 
+  # Redis — required for JWT token blacklist (logout)
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2000ms
+
 server:
   port: 8080
 
 app:
   cors:
-    allowed-origins: "*"
+    allowed-origins: "http://localhost:5173" # Vite dev server; change to production URL when deploying
 
+  cookie:
+    # Set to true in production (requires HTTPS). Keep false for local HTTP dev.
+    secure: false
+    # Leave empty for same-domain. Set to ".moeware.com" to share across subdomains.
+    domain:
+    # Access token cookie TTL in seconds (must match jwt.expiration / 1000)
+    access-token-max-age: 86400 # 24 hours
+    # Refresh token cookie TTL in seconds (must match jwt.refresh-expiration / 1000)
+    refresh-token-max-age: 604800 # 7 days
 
 # OpenAPI / Swagger Configuration
 springdoc:
