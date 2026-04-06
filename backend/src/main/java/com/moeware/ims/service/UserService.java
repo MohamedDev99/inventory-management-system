@@ -14,9 +14,11 @@ import com.moeware.ims.dto.user.UserResponseDto;
 import com.moeware.ims.dto.user.UserUpdateDto;
 import com.moeware.ims.entity.Role;
 import com.moeware.ims.entity.User;
-import com.moeware.ims.exception.ResourceNotFoundException;
 import com.moeware.ims.exception.auth.InvalidCredentialsException;
+import com.moeware.ims.exception.user.RoleNotFoundException;
 import com.moeware.ims.exception.user.UserAlreadyExistsException;
+import com.moeware.ims.exception.user.UserAlreadyExistsException.ConflictField;
+import com.moeware.ims.exception.user.UserNotFoundException;
 import com.moeware.ims.repository.RoleRepository;
 import com.moeware.ims.repository.UserRepository;
 
@@ -49,7 +51,7 @@ public class UserService implements UserDetailsService {
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
         log.debug("Loading user by username: {}", username);
         return userRepository.findByUsername(username)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found: " + username));
+                .orElseThrow(() -> new UsernameNotFoundException(username));
     }
 
     // ==========================================
@@ -61,15 +63,15 @@ public class UserService implements UserDetailsService {
         log.info("Registering new user: {}", registrationDto.getUsername());
 
         if (userRepository.existsByUsername(registrationDto.getUsername())) {
-            throw new UserAlreadyExistsException("Username already exists: " + registrationDto.getUsername());
+            throw new UserAlreadyExistsException(ConflictField.USERNAME, registrationDto.getUsername());
         }
         if (userRepository.existsByEmail(registrationDto.getEmail())) {
-            throw new UserAlreadyExistsException("Email already exists: " + registrationDto.getEmail());
+            throw new UserAlreadyExistsException(ConflictField.EMAIL, registrationDto.getEmail());
         }
 
         String roleName = registrationDto.getRoleName() != null ? registrationDto.getRoleName() : "VIEWER";
         Role role = roleRepository.findByName(roleName)
-                .orElseThrow(() -> new ResourceNotFoundException("Role not found: " + roleName));
+                .orElseThrow(() -> new RoleNotFoundException(roleName));
 
         User user = User.builder()
                 .username(registrationDto.getUsername())
@@ -90,13 +92,13 @@ public class UserService implements UserDetailsService {
 
     public UserResponseDto getUserById(Long id) {
         User user = userRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
+                .orElseThrow(() -> new UserNotFoundException(id));
         return UserResponseDto.fromEntity(user);
     }
 
     public UserResponseDto getUserByUsername(String username) {
         User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found: " + username));
+                .orElseThrow(() -> new UserNotFoundException(username));
         return UserResponseDto.fromEntity(user);
     }
 
@@ -112,7 +114,7 @@ public class UserService implements UserDetailsService {
 
     public String getUserPasswordHash(Long id) {
         User user = userRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
+                .orElseThrow(() -> new UserNotFoundException(id));
         return user.getPasswordHash();
     }
 
@@ -125,18 +127,18 @@ public class UserService implements UserDetailsService {
         log.info("Updating user with id: {}", id);
 
         User user = userRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
+                .orElseThrow(() -> new UserNotFoundException(id));
 
         if (updateDto.getEmail() != null && !updateDto.getEmail().equals(user.getEmail())) {
             if (userRepository.existsByEmail(updateDto.getEmail())) {
-                throw new UserAlreadyExistsException("Email already exists: " + updateDto.getEmail());
+                throw new UserAlreadyExistsException(ConflictField.EMAIL, updateDto.getEmail());
             }
             user.setEmail(updateDto.getEmail());
         }
 
         if (updateDto.getRoleName() != null) {
             Role role = roleRepository.findByName(updateDto.getRoleName())
-                    .orElseThrow(() -> new ResourceNotFoundException("Role not found: " + updateDto.getRoleName()));
+                    .orElseThrow(() -> new RoleNotFoundException(updateDto.getRoleName()));
             user.setRole(role);
         }
 
@@ -156,7 +158,7 @@ public class UserService implements UserDetailsService {
     public void changePassword(Long id, String newPassword) {
         log.info("Changing password for user id: {}", id);
         User user = userRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
+                .orElseThrow(() -> new UserNotFoundException(id));
 
         user.setPasswordHash(passwordEncoder.encode(newPassword));
         userRepository.save(user);
@@ -174,7 +176,7 @@ public class UserService implements UserDetailsService {
     public void changePasswordWithVerification(Long id, String currentPassword, String newPassword) {
         log.info("Self-service password change for user id: {}", id);
         User user = userRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
+                .orElseThrow(() -> new UserNotFoundException(id));
 
         if (!passwordEncoder.matches(currentPassword, user.getPasswordHash())) {
             throw new InvalidCredentialsException("Current password is incorrect");
@@ -193,7 +195,7 @@ public class UserService implements UserDetailsService {
     public void deactivateUser(Long id) {
         log.info("Deactivating user with id: {}", id);
         User user = userRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
+                .orElseThrow(() -> new UserNotFoundException(id));
         user.deactivate();
         userRepository.save(user);
         log.info("User deactivated: {}", user.getUsername());
@@ -203,7 +205,7 @@ public class UserService implements UserDetailsService {
     public void activateUser(Long id) {
         log.info("Activating user with id: {}", id);
         User user = userRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
+                .orElseThrow(() -> new UserNotFoundException(id));
         user.activate();
         userRepository.save(user);
         log.info("User activated: {}", user.getUsername());
@@ -217,7 +219,7 @@ public class UserService implements UserDetailsService {
     public void unlockUser(Long id) {
         log.info("Unlocking user account id: {}", id);
         User user = userRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
+                .orElseThrow(() -> new UserNotFoundException(id));
         user.resetFailedLoginAttempts();
         userRepository.save(user);
         log.info("User account unlocked: {}", user.getUsername());
@@ -226,7 +228,7 @@ public class UserService implements UserDetailsService {
     @Transactional
     public void updateLastLogin(String username) {
         User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found: " + username));
+                .orElseThrow(() -> new UsernameNotFoundException(username));
         user.updateLastLogin();
         userRepository.save(user);
     }

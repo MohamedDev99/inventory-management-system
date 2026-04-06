@@ -1,15 +1,21 @@
 package com.moeware.ims.exception.transaction;
 
-/**
- * Exception thrown when attempting to apply or use a resource that requires
- * approval
- * but is still in PENDING status
- * Examples: applying unapproved stock adjustment, using pending purchase order
- */
-public class PendingApprovalException extends RuntimeException {
+import org.springframework.http.HttpStatus;
 
-    private final Long resourceId;
+import com.moeware.ims.exception.BaseAppException;
+
+/**
+ * Thrown when attempting to use a resource that requires approval
+ * but is still in PENDING status.
+ *
+ * Examples: applying an unapproved stock adjustment, using a pending purchase order.
+ *
+ * @author MoeWare Team
+ */
+public class PendingApprovalException extends BaseAppException {
+
     private final String resourceType;
+    private final Long resourceId;
 
     public PendingApprovalException(String resourceType, Long resourceId) {
         super(String.format("%s with id %d is pending approval and cannot be used",
@@ -18,6 +24,7 @@ public class PendingApprovalException extends RuntimeException {
         this.resourceId = resourceId;
     }
 
+    /** Use when the message is free-form and no structured fields are available. */
     public PendingApprovalException(String message) {
         super(message);
         this.resourceType = null;
@@ -30,11 +37,12 @@ public class PendingApprovalException extends RuntimeException {
         this.resourceId = null;
     }
 
-    public Long getResourceId() {
-        return resourceId;
-    }
+    @Override
+    public HttpStatus getHttpStatus() { return HttpStatus.CONFLICT; }
 
-    public String getResourceType() {
-        return resourceType;
-    }
+    @Override
+    public String getErrorTitle() { return "Pending Approval"; }
+
+    public String getResourceType() { return resourceType; }
+    public Long getResourceId()     { return resourceId; }
 }

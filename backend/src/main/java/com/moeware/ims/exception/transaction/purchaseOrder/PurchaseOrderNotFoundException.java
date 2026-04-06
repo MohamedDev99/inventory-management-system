@@ -1,9 +1,15 @@
 package com.moeware.ims.exception.transaction.purchaseOrder;
 
+import org.springframework.http.HttpStatus;
+
+import com.moeware.ims.exception.BaseAppException;
+
 /**
- * Exception thrown when a purchase order is not found
+ * Thrown when a purchase order cannot be found by ID or PO number.
+ *
+ * @author MoeWare Team
  */
-public class PurchaseOrderNotFoundException extends RuntimeException {
+public class PurchaseOrderNotFoundException extends BaseAppException {
 
     private final Long purchaseOrderId;
     private final String poNumber;
@@ -18,6 +24,16 @@ public class PurchaseOrderNotFoundException extends RuntimeException {
         super("Purchase order not found with PO number: " + poNumber);
         this.purchaseOrderId = null;
         this.poNumber = poNumber;
+    }
+
+    @Override
+    public HttpStatus getHttpStatus() {
+        return HttpStatus.NOT_FOUND;
+    }
+
+    @Override
+    public String getErrorTitle() {
+        return "Purchase Order Not Found";
     }
 
     public Long getPurchaseOrderId() {

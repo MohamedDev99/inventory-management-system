@@ -1,10 +1,15 @@
 package com.moeware.ims.exception.inventory.category;
 
+import org.springframework.http.HttpStatus;
+
+import com.moeware.ims.exception.BaseAppException;
+
 /**
- * Exception thrown when a requested category is not found
- * More specific than generic ResourceNotFoundException for category operations
+ * Thrown when a category cannot be found by ID or code.
+ *
+ * @author MoeWare Team
  */
-public class CategoryNotFoundException extends RuntimeException {
+public class CategoryNotFoundException extends BaseAppException {
 
     private final Long categoryId;
     private final String code;
@@ -25,6 +30,16 @@ public class CategoryNotFoundException extends RuntimeException {
         super(message, cause);
         this.categoryId = null;
         this.code = null;
+    }
+
+    @Override
+    public HttpStatus getHttpStatus() {
+        return HttpStatus.NOT_FOUND;
+    }
+
+    @Override
+    public String getErrorTitle() {
+        return "Category Not Found";
     }
 
     public Long getCategoryId() {

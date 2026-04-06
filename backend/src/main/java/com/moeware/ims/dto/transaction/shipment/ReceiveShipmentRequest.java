@@ -8,6 +8,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PastOrPresent;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -39,6 +40,7 @@ public class ReceiveShipmentRequest {
     private Long receivedBy;
 
     @Schema(description = "Date and time when shipment was received", example = "2026-02-09T11:00:00")
+    @PastOrPresent(message = "Received date cannot be in the future")
     private LocalDateTime receivedDate;
 
     @Schema(description = "Additional notes", example = "All items in good condition")

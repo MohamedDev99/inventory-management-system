@@ -18,13 +18,14 @@ import com.moeware.ims.dto.staff.warehouse.WarehouseUpdateRequest;
 import com.moeware.ims.entity.User;
 import com.moeware.ims.entity.staff.Warehouse;
 import com.moeware.ims.exception.staff.warehouse.WarehouseAlreadyExistsException;
+import com.moeware.ims.exception.staff.warehouse.WarehouseAlreadyExistsException.ConflictField;
 import com.moeware.ims.exception.staff.warehouse.WarehouseHasInventoryException;
 import com.moeware.ims.exception.staff.warehouse.WarehouseNotFoundException;
 import com.moeware.ims.exception.user.ManagerNotFoundException;
+import com.moeware.ims.exception.user.UserNotFoundException;
 import com.moeware.ims.repository.UserRepository;
 import com.moeware.ims.repository.staff.WarehouseRepository;
 
-import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -53,11 +54,11 @@ public class WarehouseService {
 
         // Validate unique constraints
         if (warehouseRepository.existsByCode(request.getCode())) {
-            throw new WarehouseAlreadyExistsException("code", request.getCode());
+            throw new WarehouseAlreadyExistsException(ConflictField.CODE, request.getCode());
         }
 
         if (warehouseRepository.existsByName(request.getName())) {
-            throw new WarehouseAlreadyExistsException("name", request.getName());
+            throw new WarehouseAlreadyExistsException(ConflictField.NAME, request.getName());
         }
 
         // Validate manager if provided
@@ -189,7 +190,7 @@ public class WarehouseService {
 
         // Validate manager exists
         if (!userRepository.existsById(managerId)) {
-            throw new EntityNotFoundException("User with ID " + managerId + " not found");
+            throw new UserNotFoundException(managerId);
         }
 
         Page<Warehouse> warehouses = warehouseRepository.findByManagerId(managerId, pageable);
@@ -266,7 +267,7 @@ public class WarehouseService {
             // Check if name is being changed and if new name already exists
             if (!request.getName().equals(warehouse.getName()) &&
                     warehouseRepository.existsByName(request.getName())) {
-                throw new WarehouseAlreadyExistsException("name", request.getName());
+                throw new WarehouseAlreadyExistsException(ConflictField.NAME, request.getName());
             }
             warehouse.setName(request.getName());
         }

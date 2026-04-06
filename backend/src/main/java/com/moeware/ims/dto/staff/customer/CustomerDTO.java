@@ -23,6 +23,7 @@ public class CustomerDTO {
 
     @NotBlank(message = "Customer code is required")
     @Size(max = 50, message = "Customer code must not exceed 50 characters")
+    @Pattern(regexp = "^[A-Z0-9\\-]+$", message = "Customer code must contain only uppercase letters, digits, or hyphens")
     @Schema(description = "Unique customer code", example = "CUST-001", requiredMode = Schema.RequiredMode.REQUIRED)
     private String customerCode;
 
@@ -90,6 +91,7 @@ public class CustomerDTO {
     private String shippingPostalCode;
 
     @DecimalMin(value = "0.0", message = "Credit limit must be non-negative")
+    @Digits(integer = 10, fraction = 2, message = "Credit limit must have at most 10 integer digits and 2 decimal places")
     @Schema(description = "Customer credit limit", example = "10000.00")
     private BigDecimal creditLimit;
 

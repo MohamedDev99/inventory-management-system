@@ -36,7 +36,7 @@ import lombok.extern.slf4j.Slf4j;
  * <p>
  * Required in {@code application.yml}:
  * </p>
- * 
+ *
  * <pre>
  * app:
  *   cookie:
@@ -126,6 +126,7 @@ public class CookieService {
      */
     public String extractAccessToken(HttpServletRequest request) {
         Cookie cookie = WebUtils.getCookie(request, ACCESS_TOKEN_COOKIE);
+        log.info("Access token cookie: {}", cookie);
         return cookie != null ? cookie.getValue() : null;
     }
 
@@ -148,7 +149,7 @@ public class CookieService {
         ResponseCookie.ResponseCookieBuilder builder = ResponseCookie.from(name, value)
                 .httpOnly(true)
                 .secure(secureCookie)
-                .sameSite("Lax")
+                .sameSite(secureCookie ? "None" : "Lax")
                 .path("/api")
                 .maxAge(maxAge);
 

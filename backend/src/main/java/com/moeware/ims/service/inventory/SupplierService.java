@@ -11,14 +11,17 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.moeware.ims.dto.inventory.supplier.SupplierDTO;
+import com.moeware.ims.dto.inventory.supplier.SupplierPatchRequest;
 import com.moeware.ims.dto.inventory.supplier.SupplierPerformanceDTO;
+import com.moeware.ims.dto.inventory.supplier.SupplierRequest;
+import com.moeware.ims.dto.inventory.supplier.SupplierResponse;
 import com.moeware.ims.dto.transaction.purchaseOrder.PurchaseOrderResponse;
 import com.moeware.ims.entity.inventory.Supplier;
 import com.moeware.ims.entity.transaction.PurchaseOrder;
 import com.moeware.ims.enums.transaction.PurchaseOrderStatus;
-import com.moeware.ims.exception.ResourceNotFoundException;
 import com.moeware.ims.exception.inventory.supplier.SupplierAlreadyExistsException;
+import com.moeware.ims.exception.inventory.supplier.SupplierAlreadyExistsException.ConflictField;
+import com.moeware.ims.exception.inventory.supplier.SupplierHasPendingOrdersException;
 import com.moeware.ims.exception.inventory.supplier.SupplierNotFoundException;
 import com.moeware.ims.mapper.inventory.SupplierMapper;
 import com.moeware.ims.mapper.transaction.PurchaseOrderMapper;
@@ -52,9 +55,9 @@ public class SupplierService {
      * @param maxRating  Maximum rating
      * @param searchTerm Search term
      * @param pageable   Pagination information
-     * @return Page of SupplierDTOs
+     * @return Page of SupplierResponses
      */
-    public Page<SupplierDTO> getAllSuppliers(
+    public Page<SupplierResponse> getAllSuppliers(
             Boolean isActive,
             String country,
             Integer minRating,
@@ -68,166 +71,174 @@ public class SupplierService {
         Page<Supplier> suppliers = supplierRepository.findSuppliersWithFilters(
                 isActive, country, minRating, maxRating, searchTerm, pageable);
 
-        return suppliers.map(supplierMapper::toDTO);
+        return suppliers.map(supplierMapper::toResponse);
     }
 
     /**
      * Get supplier by ID
      *
      * @param id Supplier ID
-     * @return SupplierDTO
-     * @throws ResourceNotFoundException if supplier not found
+     * @return SupplierResponse
+     * @throws SupplierNotFoundException if supplier not found
      */
-    public SupplierDTO getSupplierById(Long id) {
+    public SupplierResponse getSupplierById(Long id) {
         log.debug("Fetching supplier with ID: {}", id);
 
         Supplier supplier = supplierRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Supplier not found with ID: " + id));
+                .orElseThrow(() -> new SupplierNotFoundException(id));
 
-        return supplierMapper.toDTO(supplier);
+        return supplierMapper.toResponse(supplier);
     }
 
     /**
      * Get supplier by code
      *
      * @param code Supplier code
-     * @return SupplierDTO
-     * @throws ResourceNotFoundException if supplier not found
+     * @return SupplierResponse
+     * @throws SupplierNotFoundException if supplier not found
      */
-    public SupplierDTO getSupplierByCode(String code) {
+    public SupplierResponse getSupplierByCode(String code) {
         log.debug("Fetching supplier with code: {}", code);
 
         Supplier supplier = supplierRepository.findByCode(code)
-                .orElseThrow(() -> new ResourceNotFoundException("Supplier not found with code: " + code));
+                .orElseThrow(() -> new SupplierNotFoundException(code));
 
-        return supplierMapper.toDTO(supplier);
+        return supplierMapper.toResponse(supplier);
     }
 
     /**
      * Create a new supplier
      *
-     * @param supplierDTO Supplier data
-     * @return Created SupplierDTO
+     * @param supplierRequest Supplier data
+     * @return Created SupplierResponse
      * @throws SupplierAlreadyExistsException if code or email already exists
      */
     @Transactional
-    public SupplierDTO createSupplier(SupplierDTO supplierDTO) {
-        log.info("Creating new supplier with code: {}", supplierDTO.getCode());
+    public SupplierResponse createSupplier(SupplierRequest supplierRequest) {
+        log.info("Creating new supplier with code: {}", supplierRequest.getCode());
 
         // Validate unique constraints
-        if (supplierRepository.existsByCode(supplierDTO.getCode())) {
-            throw new SupplierAlreadyExistsException("code", supplierDTO.getCode());
+        if (supplierRepository.existsByCode(supplierRequest.getCode())) {
+            throw new SupplierAlreadyExistsException(ConflictField.CODE, supplierRequest.getCode());
         }
 
-        if (supplierRepository.existsByEmail(supplierDTO.getEmail())) {
-            throw new SupplierAlreadyExistsException("email", supplierDTO.getEmail());
+        if (supplierRepository.existsByEmail(supplierRequest.getEmail())) {
+            throw new SupplierAlreadyExistsException(ConflictField.EMAIL, supplierRequest.getEmail());
         }
 
         // Set default values
-        if (supplierDTO.getIsActive() == null) {
-            supplierDTO.setIsActive(true);
+        if (supplierRequest.getIsActive() == null) {
+            supplierRequest.setIsActive(true);
         }
 
-        Supplier supplier = supplierMapper.toEntity(supplierDTO);
+        Supplier supplier = supplierMapper.toEntity(supplierRequest);
         Supplier savedSupplier = supplierRepository.save(supplier);
 
         log.info("Successfully created supplier with ID: {} and code: {}", savedSupplier.getId(),
                 savedSupplier.getCode());
 
-        return supplierMapper.toDTO(savedSupplier);
+        return supplierMapper.toResponse(savedSupplier);
     }
 
     /**
      * Update an existing supplier (full update)
      *
-     * @param id          Supplier ID
-     * @param supplierDTO Updated supplier data
-     * @return Updated SupplierDTO
-     * @throws ResourceNotFoundException      if supplier not found
+     * @param id              Supplier ID
+     * @param supplierRequest Updated supplier data
+     * @return Updated SupplierResponse
+     * @throws SupplierNotFoundException      if supplier not found
      * @throws SupplierAlreadyExistsException if code or email conflicts with
      *                                        another
      *                                        supplier
      */
     @Transactional
-    public SupplierDTO updateSupplier(Long id, SupplierDTO supplierDTO) {
+    public SupplierResponse updateSupplier(Long id, SupplierRequest supplierRequest) {
         log.info("Updating supplier with ID: {}", id);
 
         Supplier existingSupplier = supplierRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Supplier not found with ID: " + id));
+                .orElseThrow(() -> new SupplierNotFoundException(id));
 
         // Check for duplicate code (excluding current supplier)
-        if (!existingSupplier.getCode().equals(supplierDTO.getCode()) &&
-                supplierRepository.existsByCode(supplierDTO.getCode())) {
-            throw new SupplierAlreadyExistsException("code", supplierDTO.getCode());
+        if (!existingSupplier.getCode().equals(supplierRequest.getCode()) &&
+                supplierRepository.existsByCode(supplierRequest.getCode())) {
+            throw new SupplierAlreadyExistsException(ConflictField.CODE, supplierRequest.getCode());
         }
 
         // Check for duplicate email (excluding current supplier)
-        if (!existingSupplier.getEmail().equals(supplierDTO.getEmail()) &&
-                supplierRepository.existsByEmail(supplierDTO.getEmail())) {
-            throw new SupplierAlreadyExistsException("email", supplierDTO.getEmail());
+        if (!existingSupplier.getEmail().equals(supplierRequest.getEmail()) &&
+                supplierRepository.existsByEmail(supplierRequest.getEmail())) {
+            throw new SupplierAlreadyExistsException(ConflictField.EMAIL, supplierRequest.getEmail());
         }
 
         // Update all fields
-        supplierMapper.updateEntityFromDTO(existingSupplier, supplierDTO);
+        supplierMapper.updateEntityFromRequest(existingSupplier, supplierRequest);
         Supplier updatedSupplier = supplierRepository.save(existingSupplier);
 
         log.info("Successfully updated supplier with ID: {}", id);
 
-        return supplierMapper.toDTO(updatedSupplier);
+        return supplierMapper.toResponse(updatedSupplier);
     }
 
     /**
      * Partially update a supplier
      *
-     * @param id          Supplier ID
-     * @param supplierDTO Partial supplier data
+     * @param id                   Supplier ID
+     * @param supplierPatchRequest Partial supplier data
      * @return Updated SupplierDTO
-     * @throws ResourceNotFoundException if supplier not found
+     * @throws SupplierNotFoundException if supplier not found
      */
     @Transactional
-    public SupplierDTO patchSupplier(Long id, SupplierDTO supplierDTO) {
+    public SupplierResponse patchSupplier(Long id, SupplierPatchRequest supplierPatchRequest) {
         log.info("Partially updating supplier with ID: {}", id);
 
         Supplier existingSupplier = supplierRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Supplier not found with ID: " + id));
+                .orElseThrow(() -> new SupplierNotFoundException(id));
 
         // Validate unique constraints if fields are being updated
-        if (supplierDTO.getCode() != null && !existingSupplier.getCode().equals(supplierDTO.getCode())) {
-            if (supplierRepository.existsByCode(supplierDTO.getCode())) {
-                throw new SupplierAlreadyExistsException("code", supplierDTO.getCode());
+        if (supplierPatchRequest.getCode() != null
+                && !existingSupplier.getCode().equals(supplierPatchRequest.getCode())) {
+            if (supplierRepository.existsByCode(supplierPatchRequest.getCode())) {
+                throw new SupplierAlreadyExistsException(ConflictField.CODE, supplierPatchRequest.getCode());
             }
         }
 
-        if (supplierDTO.getEmail() != null && !existingSupplier.getEmail().equals(supplierDTO.getEmail())) {
-            if (supplierRepository.existsByEmail(supplierDTO.getEmail())) {
-                throw new SupplierAlreadyExistsException("email", supplierDTO.getEmail());
+        if (supplierPatchRequest.getEmail() != null
+                && !existingSupplier.getEmail().equals(supplierPatchRequest.getEmail())) {
+            if (supplierRepository.existsByEmail(supplierPatchRequest.getEmail())) {
+                throw new SupplierAlreadyExistsException(ConflictField.EMAIL, supplierPatchRequest.getEmail());
             }
         }
 
         // Update only provided fields
-        supplierMapper.updateEntityFromDTO(existingSupplier, supplierDTO);
+        supplierMapper.patchEntityFromRequest(existingSupplier, supplierPatchRequest);
         Supplier updatedSupplier = supplierRepository.save(existingSupplier);
 
         log.info("Successfully patched supplier with ID: {}", id);
 
-        return supplierMapper.toDTO(updatedSupplier);
+        return supplierMapper.toResponse(updatedSupplier);
     }
 
     /**
      * Soft delete a supplier (deactivate)
      *
      * @param id Supplier ID
-     * @throws ResourceNotFoundException if supplier not found
+     * @throws SupplierNotFoundException if supplier not found
      */
     @Transactional
     public void deleteSupplier(Long id) {
         log.info("Soft deleting supplier with ID: {}", id);
 
         Supplier supplier = supplierRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Supplier not found with ID: " + id));
+                .orElseThrow(() -> new SupplierNotFoundException(id));
 
-        // TODO: Check if supplier has pending purchase orders before deleting
-        // This would require PurchaseOrderRepository to be implemented
+        // Check if supplier has pending purchase orders
+        Page<PurchaseOrder> pendingOrders = purchaseOrderRepository.findBySupplierIdWithFilters(
+                id, PurchaseOrderStatus.SUBMITTED, null, null, Pageable.ofSize(1));
+
+        if (!pendingOrders.isEmpty()) {
+            long pendingCount = pendingOrders.getTotalElements();
+            throw new SupplierHasPendingOrdersException(id, (int) pendingCount);
+        }
 
         supplier.setIsActive(false);
         supplierRepository.save(supplier);
@@ -250,11 +261,11 @@ public class SupplierService {
      * @param pageable Pagination information
      * @return Page of top-rated suppliers
      */
-    public Page<SupplierDTO> getTopRatedSuppliers(Pageable pageable) {
+    public Page<SupplierResponse> getTopRatedSuppliers(Pageable pageable) {
         log.debug("Fetching top-rated suppliers");
 
         Page<Supplier> suppliers = supplierRepository.findTopRatedSuppliers(pageable);
-        return suppliers.map(supplierMapper::toDTO);
+        return suppliers.map(supplierMapper::toResponse);
     }
 
     /**
@@ -264,11 +275,11 @@ public class SupplierService {
      * @param pageable   Pagination information
      * @return Page of matching suppliers
      */
-    public Page<SupplierDTO> searchSuppliers(String searchTerm, Pageable pageable) {
+    public Page<SupplierResponse> searchSuppliers(String searchTerm, Pageable pageable) {
         log.debug("Searching suppliers with term: {}", searchTerm);
 
         Page<Supplier> suppliers = supplierRepository.searchSuppliers(searchTerm, pageable);
-        return suppliers.map(supplierMapper::toDTO);
+        return suppliers.map(supplierMapper::toResponse);
     }
 
     /**

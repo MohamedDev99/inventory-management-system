@@ -14,19 +14,24 @@ import com.moeware.ims.dto.transaction.invoice.InvoiceRequest;
 import com.moeware.ims.dto.transaction.invoice.InvoiceResponse;
 import com.moeware.ims.dto.transaction.invoice.RecordInvoicePaymentRequest;
 import com.moeware.ims.dto.transaction.invoice.UpdateInvoiceStatusRequest;
+import com.moeware.ims.entity.User;
+import com.moeware.ims.entity.staff.Customer;
 import com.moeware.ims.entity.transaction.Invoice;
 import com.moeware.ims.entity.transaction.Payment;
 import com.moeware.ims.entity.transaction.SalesOrder;
-import com.moeware.ims.entity.staff.Customer;
-import com.moeware.ims.entity.User;
 import com.moeware.ims.enums.transaction.InvoiceStatus;
 import com.moeware.ims.enums.transaction.PaymentStatus;
+import com.moeware.ims.exception.transaction.invoice.InvoiceAlreadyCancelledException;
+import com.moeware.ims.exception.transaction.invoice.InvoiceAlreadyExistsException;
+import com.moeware.ims.exception.transaction.invoice.InvoiceAlreadyPaidException;
 import com.moeware.ims.exception.transaction.invoice.InvoiceNotFoundException;
-import com.moeware.ims.exception.ResourceNotFoundException;
+import com.moeware.ims.exception.transaction.invoice.InvoicePaymentExceedsBalanceException;
+import com.moeware.ims.exception.transaction.salesOrder.SalesOrderNotFoundException;
+import com.moeware.ims.exception.user.UserNotFoundException;
+import com.moeware.ims.repository.UserRepository;
 import com.moeware.ims.repository.transaction.InvoiceRepository;
 import com.moeware.ims.repository.transaction.PaymentRepository;
 import com.moeware.ims.repository.transaction.SalesOrderRepository;
-import com.moeware.ims.repository.UserRepository;
 
 import lombok.RequiredArgsConstructor;
 
@@ -91,17 +96,18 @@ public class InvoiceService {
     @Transactional
     public InvoiceResponse generateInvoice(InvoiceRequest request, Long generatedByUserId) {
         SalesOrder salesOrder = salesOrderRepository.findById(request.getSalesOrderId())
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "SalesOrder", "id", request.getSalesOrderId()));
+                .orElseThrow(() -> new SalesOrderNotFoundException(request.getSalesOrderId()));
 
         if (invoiceRepository.existsBySalesOrderId(salesOrder.getId())) {
-            throw new IllegalStateException(
-                    "An invoice already exists for sales order: " + salesOrder.getSoNumber());
+            String existingNumber = invoiceRepository.findBySalesOrderId(salesOrder.getId()).stream().findFirst()
+                    .map(Invoice::getInvoiceNumber)
+                    .orElse("UNKNOWN");
+            throw new InvoiceAlreadyExistsException(
+                    salesOrder.getId(), salesOrder.getSoNumber(), existingNumber);
         }
 
         User generatedBy = userRepository.findById(generatedByUserId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "User", "id", generatedByUserId));
+                .orElseThrow(() -> new UserNotFoundException(generatedByUserId));
 
         String invoiceNumber = generateInvoiceNumber(request.getInvoiceDate());
 
@@ -141,7 +147,7 @@ public class InvoiceService {
         Invoice invoice = findInvoiceOrThrow(id);
 
         if (invoice.getInvoiceStatus() == InvoiceStatus.CANCELLED) {
-            throw new IllegalStateException("Cannot update status of a cancelled invoice.");
+            throw new InvoiceAlreadyCancelledException(invoice.getId(), invoice.getInvoiceNumber());
         }
 
         invoice.setInvoiceStatus(request.getInvoiceStatus());
@@ -174,10 +180,10 @@ public class InvoiceService {
         Invoice invoice = findInvoiceOrThrow(id);
 
         if (invoice.getInvoiceStatus() == InvoiceStatus.CANCELLED) {
-            throw new IllegalStateException("Cannot send a cancelled invoice.");
+            throw new InvoiceAlreadyCancelledException(invoice.getId(), invoice.getInvoiceNumber());
         }
         if (invoice.getInvoiceStatus() == InvoiceStatus.PAID) {
-            throw new IllegalStateException("Invoice is already paid. No need to resend.");
+            throw new InvoiceAlreadyPaidException(invoice.getId(), invoice.getInvoiceNumber());
         }
 
         // TODO: Integrate with email service (e.g., SendGrid, SES) to send PDF to
@@ -196,22 +202,21 @@ public class InvoiceService {
         Invoice invoice = findInvoiceOrThrow(id);
 
         if (invoice.getInvoiceStatus() == InvoiceStatus.CANCELLED) {
-            throw new IllegalStateException("Cannot record payment for a cancelled invoice.");
+            throw new InvoiceAlreadyCancelledException(invoice.getId(), invoice.getInvoiceNumber());
         }
         if (invoice.getInvoiceStatus() == InvoiceStatus.PAID) {
-            throw new IllegalStateException("Invoice is already fully paid.");
+            throw new InvoiceAlreadyPaidException(invoice.getId(), invoice.getInvoiceNumber());
         }
 
         // Validate payment amount does not exceed balance due
         if (request.getPaymentAmount().compareTo(invoice.getBalanceDue()) > 0) {
-            throw new IllegalArgumentException(
-                    "Payment amount (" + request.getPaymentAmount()
-                            + ") exceeds balance due (" + invoice.getBalanceDue() + ").");
+            throw new InvoicePaymentExceedsBalanceException(
+                    invoice.getId(), invoice.getInvoiceNumber(),
+                    request.getPaymentAmount(), invoice.getBalanceDue());
         }
 
         User processedBy = userRepository.findById(processedByUserId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "User", "id", processedByUserId));
+                .orElseThrow(() -> new UserNotFoundException(processedByUserId));
 
         // Create a Payment record linked to the sales order
         String paymentNumber = generateLinkedPaymentNumber(request.getPaymentDate());

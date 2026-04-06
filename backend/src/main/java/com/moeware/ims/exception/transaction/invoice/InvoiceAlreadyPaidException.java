@@ -1,18 +1,16 @@
 package com.moeware.ims.exception.transaction.invoice;
 
-import lombok.Getter;
+import org.springframework.http.HttpStatus;
+
+import com.moeware.ims.exception.BaseAppException;
 
 /**
  * Thrown when a payment is recorded against an invoice that is already fully
- * paid,
- * or when a send is attempted on a paid invoice.
+ * paid, or when a send is attempted on a paid invoice.
  *
- * Once an invoice reaches PAID status its balance is zero — further payments
- * would result in an overpayment which requires a dedicated credit/refund flow
- * instead.
+ * @author MoeWare Team
  */
-@Getter
-public class InvoiceAlreadyPaidException extends RuntimeException {
+public class InvoiceAlreadyPaidException extends BaseAppException {
 
     private final Long invoiceId;
     private final String invoiceNumber;
@@ -24,5 +22,23 @@ public class InvoiceAlreadyPaidException extends RuntimeException {
                 invoiceId, invoiceNumber));
         this.invoiceId = invoiceId;
         this.invoiceNumber = invoiceNumber;
+    }
+
+    @Override
+    public HttpStatus getHttpStatus() {
+        return HttpStatus.CONFLICT;
+    }
+
+    @Override
+    public String getErrorTitle() {
+        return "Invoice Already Paid";
+    }
+
+    public Long getInvoiceId() {
+        return invoiceId;
+    }
+
+    public String getInvoiceNumber() {
+        return invoiceNumber;
     }
 }

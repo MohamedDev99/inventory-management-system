@@ -3,7 +3,10 @@ package com.moeware.ims.dto.staff.warehouse;
 import java.math.BigDecimal;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -28,6 +31,7 @@ public class WarehouseCreateRequest {
     @Schema(description = "Short warehouse code", example = "WH001", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotBlank(message = "Warehouse code is required")
     @Size(max = 20, message = "Warehouse code must not exceed 20 characters")
+    @Pattern(regexp = "^[A-Z0-9\\-_]+$", message = "Warehouse code must contain only uppercase letters, digits, hyphens, or underscores")
     private String code;
 
     @Schema(description = "Street address", example = "123 Storage Street", requiredMode = Schema.RequiredMode.REQUIRED)
@@ -56,6 +60,8 @@ public class WarehouseCreateRequest {
     private Long managerId;
 
     @Schema(description = "Storage capacity in square feet", example = "50000.00")
+    @DecimalMin(value = "0.01", message = "Capacity must be greater than 0")
+    @Digits(integer = 10, fraction = 2, message = "Capacity must have at most 10 integer digits and 2 decimal places")
     private BigDecimal capacity;
 
     @Schema(description = "Whether the warehouse is operational", example = "true")

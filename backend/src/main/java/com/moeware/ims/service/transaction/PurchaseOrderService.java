@@ -18,17 +18,23 @@ import com.moeware.ims.dto.transaction.purchaseOrder.PurchaseOrderRequest;
 import com.moeware.ims.dto.transaction.purchaseOrder.PurchaseOrderResponse;
 import com.moeware.ims.dto.transaction.purchaseOrder.PurchaseOrderSummaryResponse;
 import com.moeware.ims.dto.transaction.purchaseOrder.ReceivePurchaseOrderRequest;
+import com.moeware.ims.entity.User;
 import com.moeware.ims.entity.inventory.Product;
 import com.moeware.ims.entity.inventory.Supplier;
 import com.moeware.ims.entity.staff.Warehouse;
 import com.moeware.ims.entity.transaction.PurchaseOrder;
 import com.moeware.ims.entity.transaction.PurchaseOrderItem;
-import com.moeware.ims.entity.User;
 import com.moeware.ims.enums.transaction.PurchaseOrderStatus;
-import com.moeware.ims.exception.ResourceNotFoundException;
+import com.moeware.ims.exception.inventory.product.ProductNotFoundException;
+import com.moeware.ims.exception.inventory.supplier.SupplierNotFoundException;
+import com.moeware.ims.exception.staff.warehouse.WarehouseNotFoundException;
 import com.moeware.ims.exception.transaction.InvalidOrderStatusTransitionException;
 import com.moeware.ims.exception.transaction.OrderNotEditableException;
+import com.moeware.ims.exception.transaction.purchaseOrder.InvalidPurchaseOrderOperationException;
+import com.moeware.ims.exception.transaction.purchaseOrder.PurchaseOrderItemNotFoundException;
 import com.moeware.ims.exception.transaction.purchaseOrder.PurchaseOrderNotFoundException;
+import com.moeware.ims.exception.transaction.purchaseOrder.PurchaseOrderReceiptException;
+import com.moeware.ims.exception.user.UserNotFoundException;
 import com.moeware.ims.repository.transaction.PurchaseOrderItemRepository;
 import com.moeware.ims.repository.transaction.PurchaseOrderRepository;
 
@@ -106,7 +112,7 @@ public class PurchaseOrderService {
 
         // Validate supplier exists
         if (!supplierRepository.existsById(supplierId)) {
-            throw new ResourceNotFoundException("Supplier", "id", supplierId);
+            throw new SupplierNotFoundException(supplierId);
         }
         return purchaseOrderRepository.findBySupplierIdWithFilters(supplierId, status, startDate, endDate, pageable)
                 .map(this::toSummaryResponse);
@@ -122,13 +128,13 @@ public class PurchaseOrderService {
         log.info("Creating purchase order for supplier id: {}", request.getSupplierId());
 
         Supplier supplier = supplierRepository.findById(request.getSupplierId())
-                .orElseThrow(() -> new ResourceNotFoundException("Supplier", "id", request.getSupplierId()));
+                .orElseThrow(() -> new SupplierNotFoundException(request.getSupplierId()));
 
         Warehouse warehouse = warehouseRepository.findById(request.getWarehouseId())
-                .orElseThrow(() -> new ResourceNotFoundException("Warehouse", "id", request.getWarehouseId()));
+                .orElseThrow(() -> new WarehouseNotFoundException(request.getWarehouseId()));
 
         User createdByUser = userRepository.findById(createdByUserId)
-                .orElseThrow(() -> new ResourceNotFoundException("User", "id", createdByUserId));
+                .orElseThrow(() -> new UserNotFoundException(createdByUserId));
 
         PurchaseOrder po = PurchaseOrder.builder()
                 .poNumber(generatePoNumber(request.getOrderDate()))
@@ -146,7 +152,7 @@ public class PurchaseOrderService {
         // Add line items
         for (PurchaseOrderItemRequest itemReq : request.getItems()) {
             Product product = productRepository.findById(itemReq.getProductId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Product", "id", itemReq.getProductId()));
+                    .orElseThrow(() -> new ProductNotFoundException(itemReq.getProductId()));
 
             PurchaseOrderItem item = PurchaseOrderItem.builder()
                     .product(product)
@@ -179,10 +185,10 @@ public class PurchaseOrderService {
         }
 
         Supplier supplier = supplierRepository.findById(request.getSupplierId())
-                .orElseThrow(() -> new ResourceNotFoundException("Supplier", "id", request.getSupplierId()));
+                .orElseThrow(() -> new SupplierNotFoundException(request.getSupplierId()));
 
         Warehouse warehouse = warehouseRepository.findById(request.getWarehouseId())
-                .orElseThrow(() -> new ResourceNotFoundException("Warehouse", "id", request.getWarehouseId()));
+                .orElseThrow(() -> new WarehouseNotFoundException(request.getWarehouseId()));
 
         po.setSupplier(supplier);
         po.setWarehouse(warehouse);
@@ -196,7 +202,7 @@ public class PurchaseOrderService {
         po.getItems().clear();
         for (PurchaseOrderItemRequest itemReq : request.getItems()) {
             Product product = productRepository.findById(itemReq.getProductId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Product", "id", itemReq.getProductId()));
+                    .orElseThrow(() -> new ProductNotFoundException(itemReq.getProductId()));
 
             PurchaseOrderItem item = PurchaseOrderItem.builder()
                     .product(product)
@@ -229,7 +235,7 @@ public class PurchaseOrderService {
         }
 
         if (po.getItems().isEmpty()) {
-            throw new IllegalStateException("Cannot submit a purchase order with no items");
+            throw new InvalidPurchaseOrderOperationException("Cannot submit a purchase order with no items");
         }
 
         po.setStatus(PurchaseOrderStatus.SUBMITTED);
@@ -298,22 +304,20 @@ public class PurchaseOrderService {
         }
 
         User performedBy = userRepository.findById(performedByUserId)
-                .orElseThrow(() -> new ResourceNotFoundException("User", "id", performedByUserId));
+                .orElseThrow(() -> new UserNotFoundException(performedByUserId));
 
         // Update quantityReceived on each line item
         for (ReceivePurchaseOrderRequest.ItemReceipt receipt : request.getItems()) {
             PurchaseOrderItem item = purchaseOrderItemRepository
                     .findByIdAndPurchaseOrderId(receipt.getItemId(), id)
-                    .orElseThrow(() -> new ResourceNotFoundException(
-                            "PurchaseOrderItem", "id", receipt.getItemId()));
+                    .orElseThrow(() -> new PurchaseOrderItemNotFoundException(receipt.getItemId(), id));
 
             int alreadyReceived = item.getQuantityReceived();
             int newTotal = alreadyReceived + receipt.getQuantityReceived();
 
             if (newTotal > item.getQuantityOrdered()) {
-                throw new IllegalArgumentException(
-                        String.format("Total received quantity (%d) exceeds ordered quantity (%d) for item %d.",
-                                newTotal, item.getQuantityOrdered(), item.getId()));
+                throw new PurchaseOrderReceiptException(item.getId(), alreadyReceived, receipt.getQuantityReceived(),
+                        item.getQuantityOrdered());
             }
 
             item.setQuantityReceived(newTotal);

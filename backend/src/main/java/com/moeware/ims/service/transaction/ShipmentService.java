@@ -13,18 +13,24 @@ import com.moeware.ims.dto.transaction.shipment.DeliverShipmentRequest;
 import com.moeware.ims.dto.transaction.shipment.ShipmentRequest;
 import com.moeware.ims.dto.transaction.shipment.ShipmentResponse;
 import com.moeware.ims.dto.transaction.shipment.UpdateShipmentStatusRequest;
+import com.moeware.ims.entity.User;
+import com.moeware.ims.entity.staff.Warehouse;
 import com.moeware.ims.entity.transaction.SalesOrder;
 import com.moeware.ims.entity.transaction.Shipment;
-import com.moeware.ims.entity.staff.Warehouse;
-import com.moeware.ims.entity.User;
-import com.moeware.ims.enums.transaction.ShipmentStatus;
 import com.moeware.ims.enums.transaction.SalesOrderStatus;
+import com.moeware.ims.enums.transaction.ShipmentStatus;
+import com.moeware.ims.exception.staff.warehouse.WarehouseNotFoundException;
+import com.moeware.ims.exception.transaction.salesOrder.SalesOrderNotFoundException;
+import com.moeware.ims.exception.transaction.shipment.SalesOrderNotFulfilledException;
+import com.moeware.ims.exception.transaction.shipment.ShipmentAlreadyTerminatedException;
+import com.moeware.ims.exception.transaction.shipment.ShipmentDeliveryEndpointRequiredException;
+import com.moeware.ims.exception.transaction.shipment.ShipmentNotEligibleForDeliveryException;
 import com.moeware.ims.exception.transaction.shipment.ShipmentNotFoundException;
-import com.moeware.ims.exception.ResourceNotFoundException;
-import com.moeware.ims.repository.transaction.ShipmentRepository;
-import com.moeware.ims.repository.transaction.SalesOrderRepository;
-import com.moeware.ims.repository.staff.WarehouseRepository;
+import com.moeware.ims.exception.user.UserNotFoundException;
 import com.moeware.ims.repository.UserRepository;
+import com.moeware.ims.repository.staff.WarehouseRepository;
+import com.moeware.ims.repository.transaction.SalesOrderRepository;
+import com.moeware.ims.repository.transaction.ShipmentRepository;
 
 import lombok.RequiredArgsConstructor;
 
@@ -106,22 +112,18 @@ public class ShipmentService {
         @Transactional
         public ShipmentResponse createShipment(ShipmentRequest request, Long shippedByUserId) {
                 SalesOrder salesOrder = salesOrderRepository.findById(request.getSalesOrderId())
-                                .orElseThrow(() -> new ResourceNotFoundException(
-                                                "SalesOrder", "id", request.getSalesOrderId()));
+                                .orElseThrow(() -> new SalesOrderNotFoundException(request.getSalesOrderId()));
 
                 if (salesOrder.getStatus() != SalesOrderStatus.FULFILLED) {
-                        throw new IllegalStateException(
-                                        "Cannot create shipment for sales order in status: " + salesOrder.getStatus()
-                                                        + ". Order must be FULFILLED before shipping.");
+                        throw new SalesOrderNotFulfilledException(
+                                        salesOrder.getId(), salesOrder.getSoNumber(), salesOrder.getStatus());
                 }
 
                 Warehouse warehouse = warehouseRepository.findById(request.getWarehouseId())
-                                .orElseThrow(() -> new ResourceNotFoundException(
-                                                "Warehouse", "id", request.getWarehouseId()));
+                                .orElseThrow(() -> new WarehouseNotFoundException(request.getWarehouseId()));
 
                 User shippedBy = userRepository.findById(shippedByUserId)
-                                .orElseThrow(() -> new ResourceNotFoundException(
-                                                "User", "id", shippedByUserId));
+                                .orElseThrow(() -> new UserNotFoundException(shippedByUserId));
 
                 String shipmentNumber = generateShipmentNumber();
 
@@ -161,16 +163,12 @@ public class ShipmentService {
 
                 // Guard: cannot move back to PENDING or set DELIVERED via this endpoint
                 if (request.getStatus() == ShipmentStatus.DELIVERED) {
-                        throw new IllegalArgumentException(
-                                        "Use the /deliver endpoint to mark a shipment as delivered.");
+                        throw new ShipmentDeliveryEndpointRequiredException(id);
                 }
                 if (shipment.getStatus() == ShipmentStatus.DELIVERED
                                 || shipment.getStatus() == ShipmentStatus.RETURNED) {
-                        throw new IllegalStateException(
-                                        "Cannot change status of a shipment that is already "
-                                                        + shipment.getStatus() + ".");
+                        throw new ShipmentAlreadyTerminatedException(id, shipment.getStatus());
                 }
-
                 if (request.getNotes() != null) {
                         shipment.setNotes(request.getNotes());
                 }
@@ -187,12 +185,11 @@ public class ShipmentService {
                 Shipment shipment = findShipmentOrThrow(id);
 
                 if (shipment.getStatus() == ShipmentStatus.DELIVERED) {
-                        throw new IllegalStateException("Shipment is already marked as delivered.");
+                        throw new ShipmentAlreadyTerminatedException(id, shipment.getStatus());
                 }
                 if (shipment.getStatus() == ShipmentStatus.RETURNED
                                 || shipment.getStatus() == ShipmentStatus.FAILED) {
-                        throw new IllegalStateException(
-                                        "Cannot deliver a shipment with status: " + shipment.getStatus());
+                        throw new ShipmentNotEligibleForDeliveryException(id, shipment.getStatus());
                 }
 
                 shipment.setStatus(ShipmentStatus.DELIVERED);

@@ -4,10 +4,12 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -29,6 +31,7 @@ public class EmployeeRequestDTO {
     @Schema(description = "Unique employee code", example = "EMP-001", requiredMode = Schema.RequiredMode.REQUIRED, maxLength = 50)
     @NotBlank(message = "Employee code is required")
     @Size(max = 50, message = "Employee code must not exceed 50 characters")
+    @Pattern(regexp = "^EMP-\\d+$", message = "Employee code must follow format EMP-XXX (e.g. EMP-001)")
     private String employeeCode;
 
     @Schema(description = "Employee first name", example = "John", requiredMode = Schema.RequiredMode.REQUIRED, maxLength = 100)
@@ -69,10 +72,17 @@ public class EmployeeRequestDTO {
     private LocalDate terminationDate;
 
     @Schema(description = "Annual salary", example = "75000.00", minimum = "0")
-    @DecimalMin(value = "0.0", inclusive = true, message = "Salary must be non-negative")
+    @DecimalMin(value = "0.01", inclusive = true, message = "Salary must be greater than 0")
     private BigDecimal salary;
 
     @Schema(description = "Whether the employee is active", example = "true")
     @Builder.Default
     private Boolean isActive = true;
+
+    @AssertTrue(message = "Termination date must be after hire date")
+    public boolean isTerminationDateValid() {
+        if (terminationDate == null || hireDate == null)
+            return true;
+        return terminationDate.isAfter(hireDate);
+    }
 }

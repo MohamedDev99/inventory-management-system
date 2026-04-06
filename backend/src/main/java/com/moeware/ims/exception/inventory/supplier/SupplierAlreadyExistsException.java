@@ -1,19 +1,45 @@
 package com.moeware.ims.exception.inventory.supplier;
 
+import org.springframework.http.HttpStatus;
+
+import com.moeware.ims.exception.BaseAppException;
+
 /**
- * Exception thrown when attempting to create a supplier that already exists
+ * Thrown when attempting to create or update a supplier with a code or email
+ * that already belongs to another supplier.
+ *
+ * @author MoeWare Team
  */
-public class SupplierAlreadyExistsException extends RuntimeException {
+public class SupplierAlreadyExistsException extends BaseAppException {
 
-    public SupplierAlreadyExistsException(String field, String value) {
-        super("Supplier with " + field + " '" + value + "' already exists");
+    public enum ConflictField {
+        CODE, EMAIL
     }
 
-    public SupplierAlreadyExistsException(String message) {
-        super(message);
+    private final ConflictField conflictField;
+    private final String conflictValue;
+
+    public SupplierAlreadyExistsException(ConflictField field, String value) {
+        super(String.format("Supplier with %s '%s' already exists", field.name().toLowerCase(), value));
+        this.conflictField = field;
+        this.conflictValue = value;
     }
 
-    public SupplierAlreadyExistsException(String message, Throwable cause) {
-        super(message, cause);
+    @Override
+    public HttpStatus getHttpStatus() {
+        return HttpStatus.CONFLICT;
+    }
+
+    @Override
+    public String getErrorTitle() {
+        return "Supplier Already Exists";
+    }
+
+    public ConflictField getConflictField() {
+        return conflictField;
+    }
+
+    public String getConflictValue() {
+        return conflictValue;
     }
 }

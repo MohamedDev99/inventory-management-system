@@ -25,7 +25,7 @@ import com.moeware.ims.dto.transaction.salesOrder.SalesOrderRequest;
 import com.moeware.ims.dto.transaction.salesOrder.SalesOrderResponse;
 import com.moeware.ims.dto.transaction.salesOrder.SalesOrderSummaryResponse;
 import com.moeware.ims.enums.transaction.SalesOrderStatus;
-import com.moeware.ims.exception.GlobalExceptionHandler;
+import com.moeware.ims.exception.handler.GlobalExceptionHandler;
 import com.moeware.ims.service.transaction.SalesOrderService;
 
 import io.swagger.v3.oas.annotations.Operation;

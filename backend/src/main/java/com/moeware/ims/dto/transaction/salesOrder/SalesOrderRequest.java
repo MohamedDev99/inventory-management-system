@@ -6,12 +6,14 @@ import java.util.List;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PastOrPresent;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
@@ -68,6 +70,7 @@ public class SalesOrderRequest {
     private String postalCode;
 
     @NotNull(message = "Order date is required")
+    @PastOrPresent(message = "Order date cannot be in the future")
     @Schema(description = "Date when the customer placed the order", example = "2026-02-20", requiredMode = Schema.RequiredMode.REQUIRED)
     private LocalDate orderDate;
 
@@ -88,4 +91,15 @@ public class SalesOrderRequest {
     @Valid
     @Schema(description = "List of line items (products) in this order", requiredMode = Schema.RequiredMode.REQUIRED)
     private List<SalesOrderItemRequest> items;
+
+    @AssertTrue(message = "Duplicate products are not allowed in a single order")
+    public boolean hasNoDuplicateProducts() {
+        if (items == null)
+            return true;
+        long distinctCount = items.stream()
+                .filter(i -> i.getProductId() != null)
+                .map(SalesOrderItemRequest::getProductId)
+                .distinct().count();
+        return distinctCount == items.size();
+    }
 }

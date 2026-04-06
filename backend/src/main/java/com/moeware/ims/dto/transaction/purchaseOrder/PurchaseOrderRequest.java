@@ -6,6 +6,7 @@ import java.util.List;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotEmpty;
@@ -43,12 +44,14 @@ public class PurchaseOrderRequest {
     @DecimalMin(value = "0.0", inclusive = true, message = "Tax amount must be non-negative")
     @Digits(integer = 10, fraction = 2)
     @Schema(description = "Tax amount applied to the order", example = "85.00", defaultValue = "0.00")
-    private BigDecimal taxAmount;
+    @Builder.Default
+    private BigDecimal taxAmount = BigDecimal.ZERO;
 
     @DecimalMin(value = "0.0", inclusive = true, message = "Discount amount must be non-negative")
     @Digits(integer = 10, fraction = 2)
     @Schema(description = "Discount amount applied to the order", example = "50.00", defaultValue = "0.00")
-    private BigDecimal discountAmount;
+    @Builder.Default
+    private BigDecimal discountAmount = BigDecimal.ZERO;
 
     @Schema(description = "Additional notes or instructions for the purchase order", example = "Please deliver to loading dock B")
     private String notes;
@@ -57,4 +60,23 @@ public class PurchaseOrderRequest {
     @Valid
     @Schema(description = "List of line items in the purchase order", requiredMode = Schema.RequiredMode.REQUIRED)
     private List<PurchaseOrderItemRequest> items;
+
+    @AssertTrue(message = "Expected delivery date must be after or equal to order date")
+    public boolean isDeliveryDateValid() {
+        if (expectedDeliveryDate == null || orderDate == null)
+            return true;
+        return !expectedDeliveryDate.isBefore(orderDate);
+    }
+
+    @AssertTrue(message = "Duplicate products are not allowed in a single order")
+    public boolean hasNoDuplicateProducts() {
+        if (items == null)
+            return true;
+        long distinctCount = items.stream()
+                .filter(i -> i.getProductId() != null)
+                .map(PurchaseOrderItemRequest::getProductId)
+                .distinct().count();
+        return distinctCount == items.size();
+    }
+
 }

@@ -20,8 +20,13 @@ import com.moeware.ims.entity.transaction.Payment;
 import com.moeware.ims.entity.transaction.SalesOrder;
 import com.moeware.ims.enums.transaction.PaymentMethod;
 import com.moeware.ims.enums.transaction.PaymentStatus;
-import com.moeware.ims.exception.ResourceNotFoundException;
+import com.moeware.ims.exception.staff.customer.CustomerNotFoundException;
+import com.moeware.ims.exception.transaction.payment.PaymentAlreadyRefundedException;
 import com.moeware.ims.exception.transaction.payment.PaymentNotFoundException;
+import com.moeware.ims.exception.transaction.payment.PaymentNotRefundableException;
+import com.moeware.ims.exception.transaction.payment.RefundAmountExceedsPaymentException;
+import com.moeware.ims.exception.transaction.salesOrder.SalesOrderNotFoundException;
+import com.moeware.ims.exception.user.UserNotFoundException;
 import com.moeware.ims.repository.UserRepository;
 import com.moeware.ims.repository.staff.CustomerRepository;
 import com.moeware.ims.repository.transaction.PaymentRepository;
@@ -88,19 +93,16 @@ public class PaymentService {
     @Transactional
     public PaymentResponse recordPayment(PaymentRequest request, Long processedByUserId) {
         Customer customer = customerRepository.findById(request.getCustomerId())
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Customer", "id", request.getCustomerId()));
+                .orElseThrow(() -> new CustomerNotFoundException(request.getCustomerId()));
 
         SalesOrder salesOrder = null;
         if (request.getSalesOrderId() != null) {
             salesOrder = salesOrderRepository.findById(request.getSalesOrderId())
-                    .orElseThrow(() -> new ResourceNotFoundException(
-                            "SalesOrder", "id", request.getSalesOrderId()));
+                    .orElseThrow(() -> new SalesOrderNotFoundException(request.getSalesOrderId()));
         }
 
         User processedBy = userRepository.findById(processedByUserId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "User", "id", processedByUserId));
+                .orElseThrow(() -> new UserNotFoundException(processedByUserId));
 
         String paymentNumber = generatePaymentNumber(request.getPaymentDate());
 
@@ -129,7 +131,7 @@ public class PaymentService {
         Payment payment = findPaymentOrThrow(id);
 
         if (payment.getPaymentStatus() == PaymentStatus.REFUNDED) {
-            throw new IllegalStateException("Cannot change status of a refunded payment.");
+            throw new PaymentAlreadyRefundedException(payment.getId(), payment.getPaymentNumber());
         }
 
         payment.setPaymentStatus(request.getPaymentStatus());
@@ -149,15 +151,12 @@ public class PaymentService {
         Payment payment = findPaymentOrThrow(id);
 
         if (payment.getPaymentStatus() != PaymentStatus.COMPLETED) {
-            throw new IllegalStateException(
-                    "Can only refund COMPLETED payments. Current status: "
-                            + payment.getPaymentStatus());
+            throw new PaymentNotRefundableException(payment.getId(), payment.getPaymentStatus());
         }
 
         if (request.getRefundAmount().compareTo(payment.getAmount()) > 0) {
-            throw new IllegalArgumentException(
-                    "Refund amount (" + request.getRefundAmount()
-                            + ") cannot exceed the original payment amount (" + payment.getAmount() + ").");
+            throw new RefundAmountExceedsPaymentException(
+                    payment.getId(), request.getRefundAmount(), payment.getAmount());
         }
 
         payment.setPaymentStatus(PaymentStatus.REFUNDED);

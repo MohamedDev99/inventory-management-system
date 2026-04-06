@@ -1,5 +1,10 @@
 package com.moeware.ims.service.staff;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.moeware.ims.dto.staff.employee.AssignDepartmentDTO;
 import com.moeware.ims.dto.staff.employee.AssignManagerDTO;
 import com.moeware.ims.dto.staff.employee.EmployeePatchDTO;
@@ -9,20 +14,19 @@ import com.moeware.ims.dto.staff.employee.LinkUserDTO;
 import com.moeware.ims.entity.User;
 import com.moeware.ims.entity.staff.Department;
 import com.moeware.ims.entity.staff.Employee;
-import com.moeware.ims.exception.ResourceNotFoundException;
 import com.moeware.ims.exception.staff.department.DepartmentNotFoundException;
 import com.moeware.ims.exception.staff.employee.EmployeeAlreadyExistsException;
+import com.moeware.ims.exception.staff.employee.EmployeeAlreadyExistsException.ConflictField;
 import com.moeware.ims.exception.staff.employee.EmployeeNotFoundException;
+import com.moeware.ims.exception.staff.employee.InvalidEmployeeOperationException;
+import com.moeware.ims.exception.user.UserNotFoundException;
 import com.moeware.ims.mapper.staff.employee.EmployeeMapper;
+import com.moeware.ims.repository.UserRepository;
 import com.moeware.ims.repository.staff.DepartmentRepository;
 import com.moeware.ims.repository.staff.EmployeeRepository;
-import com.moeware.ims.repository.UserRepository;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Service for Employee business logic and hierarchy management
@@ -149,7 +153,7 @@ public class EmployeeService {
 
         if (request.getManagerId() != null) {
             if (request.getManagerId().equals(id)) {
-                throw new IllegalArgumentException("An employee cannot be their own manager");
+                throw new InvalidEmployeeOperationException("An employee cannot be their own manager");
             }
             Employee manager = employeeRepository.findById(request.getManagerId())
                     .orElseThrow(() -> new EmployeeNotFoundException(request.getManagerId()));
@@ -175,7 +179,7 @@ public class EmployeeService {
 
         if (request.getEmail() != null && !request.getEmail().equalsIgnoreCase(employee.getEmail())) {
             if (employeeRepository.existsByEmailAndIdNot(request.getEmail(), id)) {
-                throw new EmployeeAlreadyExistsException("email", request.getEmail());
+                throw new EmployeeAlreadyExistsException(ConflictField.EMAIL, request.getEmail());
             }
             employee.setEmail(request.getEmail());
         }
@@ -240,7 +244,7 @@ public class EmployeeService {
         log.info("Assigning manager id={} to employee id={}", request.getManagerId(), employeeId);
 
         if (employeeId.equals(request.getManagerId())) {
-            throw new IllegalArgumentException("An employee cannot be their own manager");
+            throw new InvalidEmployeeOperationException("An employee cannot be their own manager");
         }
 
         Employee employee = employeeRepository.findById(employeeId)
@@ -265,12 +269,11 @@ public class EmployeeService {
 
         // Ensure user exists
         User user = userRepository.findById(request.getUserId())
-                .orElseThrow(() -> new ResourceNotFoundException("User", "id", request.getUserId()));
+                .orElseThrow(() -> new UserNotFoundException(request.getUserId()));
 
         // Ensure the user is not already linked to another employee
         if (employeeRepository.existsByUserId(request.getUserId())) {
-            throw new EmployeeAlreadyExistsException(
-                    "An employee is already linked to user id: " + request.getUserId());
+            throw new EmployeeAlreadyExistsException(ConflictField.USER_LINKED, String.valueOf(request.getUserId()));
         }
 
         employee.setUser(user);
@@ -296,17 +299,17 @@ public class EmployeeService {
     private void validateUniqueFields(String code, String email, Long excludeId) {
         if (excludeId == null) {
             if (employeeRepository.existsByEmployeeCode(code)) {
-                throw new EmployeeAlreadyExistsException("employee_code", code);
+                throw new EmployeeAlreadyExistsException(ConflictField.EMPLOYEE_CODE, code);
             }
             if (employeeRepository.existsByEmail(email)) {
-                throw new EmployeeAlreadyExistsException("email", email);
+                throw new EmployeeAlreadyExistsException(ConflictField.EMAIL, email);
             }
         } else {
             if (employeeRepository.existsByEmployeeCodeAndIdNot(code, excludeId)) {
-                throw new EmployeeAlreadyExistsException("employee_code", code);
+                throw new EmployeeAlreadyExistsException(ConflictField.EMPLOYEE_CODE, code);
             }
             if (employeeRepository.existsByEmailAndIdNot(email, excludeId)) {
-                throw new EmployeeAlreadyExistsException("email", email);
+                throw new EmployeeAlreadyExistsException(ConflictField.EMAIL, email);
             }
         }
     }

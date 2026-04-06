@@ -3,6 +3,7 @@ package com.moeware.ims.dto.user;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -32,9 +33,12 @@ public class UserRegistrationDto {
     @Schema(description = "Strong password (min 8 characters)", example = "SecurePass123!", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotBlank(message = "Password is required")
     @Size(min = 8, max = 100, message = "Password must be between 8 and 100 characters")
+    @Pattern(regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]{8,}$", message = "Password must contain at least one uppercase letter, one lowercase letter, one digit, and one special character (@$!%*?&)")
     private String password;
 
     @Schema(description = "User role (ADMIN, MANAGER, WAREHOUSE_STAFF, VIEWER). Defaults to VIEWER if not specified.", example = "MANAGER", allowableValues = {
             "ADMIN", "MANAGER", "WAREHOUSE_STAFF", "VIEWER" })
-    private String roleName; // Optional, defaults to VIEWER
+    @Pattern(regexp = "^(ADMIN|MANAGER|WAREHOUSE_STAFF|VIEWER)$", message = "Role must be one of: ADMIN, MANAGER, WAREHOUSE_STAFF, VIEWER")
+    @NotBlank(message = "RoleName is required")
+    private String roleName;
 }

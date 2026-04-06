@@ -1,20 +1,18 @@
 package com.moeware.ims.exception.transaction.shipment;
 
+import org.springframework.http.HttpStatus;
+
+import com.moeware.ims.exception.BaseAppException;
 import com.moeware.ims.enums.transaction.ShipmentStatus;
-import lombok.Getter;
 
 /**
  * Thrown when an operation requires an active shipment (PENDING or IN_TRANSIT)
  * but the shipment is already in a terminal state (DELIVERED, RETURNED, or
  * FAILED).
  *
- * Examples:
- * - Trying to mark a DELIVERED shipment as delivered again
- * - Trying to update the status of a RETURNED shipment
- * - Trying to update the status of a FAILED shipment
+ * @author MoeWare Team
  */
-@Getter
-public class ShipmentAlreadyTerminatedException extends RuntimeException {
+public class ShipmentAlreadyTerminatedException extends BaseAppException {
 
     private final Long shipmentId;
     private final ShipmentStatus currentStatus;
@@ -25,5 +23,23 @@ public class ShipmentAlreadyTerminatedException extends RuntimeException {
                 shipmentId, currentStatus));
         this.shipmentId = shipmentId;
         this.currentStatus = currentStatus;
+    }
+
+    @Override
+    public HttpStatus getHttpStatus() {
+        return HttpStatus.CONFLICT;
+    }
+
+    @Override
+    public String getErrorTitle() {
+        return "Shipment Already Terminated";
+    }
+
+    public Long getShipmentId() {
+        return shipmentId;
+    }
+
+    public ShipmentStatus getCurrentStatus() {
+        return currentStatus;
     }
 }

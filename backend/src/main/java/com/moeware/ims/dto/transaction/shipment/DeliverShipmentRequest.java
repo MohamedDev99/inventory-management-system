@@ -4,6 +4,7 @@ import java.time.LocalDate;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PastOrPresent;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -15,6 +16,7 @@ import lombok.NoArgsConstructor;
 public class DeliverShipmentRequest {
 
     @NotNull(message = "Actual delivery date is required")
+    @PastOrPresent(message = "Actual delivery date cannot be in the future")
     @Schema(description = "Actual date when the shipment was delivered", example = "2026-02-04", requiredMode = Schema.RequiredMode.REQUIRED)
     private LocalDate actualDeliveryDate;
 

@@ -19,6 +19,7 @@ public class ProductCreateRequest {
     @Schema(description = "Stock Keeping Unit - unique product identifier", example = "LAP-001", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotBlank(message = "SKU is required")
     @Size(max = 100, message = "SKU must not exceed 100 characters")
+    @Pattern(regexp = "^[A-Z0-9\\-_]+$", message = "SKU must contain only uppercase letters, digits, hyphens, or underscores")
     private String sku;
 
     @Schema(description = "Product name", example = "Dell Laptop XPS 15", requiredMode = Schema.RequiredMode.REQUIRED)
@@ -64,9 +65,17 @@ public class ProductCreateRequest {
 
     @Schema(description = "URL to product image", example = "https://example.com/images/product.jpg")
     @Size(max = 500, message = "Image URL must not exceed 500 characters")
+    @Pattern(regexp = "^(https?://).+", message = "Image URL must be a valid HTTP/HTTPS URL")
     private String imageUrl;
 
     @Schema(description = "Whether the product is active in the catalog", example = "true")
     @Builder.Default
     private Boolean isActive = true;
+
+    @AssertTrue(message = "Minimum stock level must be less than or equal to reorder level")
+    public boolean isStockLevelsValid() {
+        if (minStockLevel == null || reorderLevel == null)
+            return true;
+        return minStockLevel <= reorderLevel;
+    }
 }
