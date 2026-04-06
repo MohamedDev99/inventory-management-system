@@ -9,6 +9,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PastOrPresent;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -27,6 +29,7 @@ public class RecordInvoicePaymentRequest {
     private BigDecimal paymentAmount;
 
     @NotNull(message = "Payment date is required")
+    @PastOrPresent(message = "Payment date cannot be in the future")
     @Schema(description = "Date when the payment was received", example = "2026-02-15", requiredMode = Schema.RequiredMode.REQUIRED)
     private LocalDate paymentDate;
 
@@ -35,6 +38,7 @@ public class RecordInvoicePaymentRequest {
     private PaymentMethod paymentMethod;
 
     @Size(max = 100)
+    @Pattern(regexp = "^(?!\\s*$).+", message = "Reference number must not be blank if provided")
     @Schema(description = "External reference number for this payment", example = "TXN-7890123")
     private String referenceNumber;
 }

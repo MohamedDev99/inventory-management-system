@@ -1,10 +1,15 @@
 package com.moeware.ims.exception.staff.warehouse;
 
+import org.springframework.http.HttpStatus;
+
+import com.moeware.ims.exception.BaseAppException;
+
 /**
- * Exception thrown when a requested warehouse is not found
- * More specific than generic ResourceNotFoundException for warehouse operations
+ * Thrown when a warehouse cannot be found by ID or code.
+ *
+ * @author MoeWare Team
  */
-public class WarehouseNotFoundException extends RuntimeException {
+public class WarehouseNotFoundException extends BaseAppException {
 
     private final Long warehouseId;
     private final String code;
@@ -25,6 +30,16 @@ public class WarehouseNotFoundException extends RuntimeException {
         super(message, cause);
         this.warehouseId = null;
         this.code = null;
+    }
+
+    @Override
+    public HttpStatus getHttpStatus() {
+        return HttpStatus.NOT_FOUND;
+    }
+
+    @Override
+    public String getErrorTitle() {
+        return "Warehouse Not Found";
     }
 
     public Long getWarehouseId() {

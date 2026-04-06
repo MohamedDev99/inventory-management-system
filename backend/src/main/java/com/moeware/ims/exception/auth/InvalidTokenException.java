@@ -1,11 +1,15 @@
 package com.moeware.ims.exception.auth;
 
+import org.springframework.http.HttpStatus;
+
+import com.moeware.ims.exception.BaseAppException;
+
 /**
- * Exception thrown when JWT token is invalid or expired
+ * Thrown when a JWT token is invalid, expired, or cannot be parsed.
  *
  * @author MoeWare Team
  */
-public class InvalidTokenException extends RuntimeException {
+public class InvalidTokenException extends BaseAppException {
 
     public InvalidTokenException(String message) {
         super(message);
@@ -13,5 +17,15 @@ public class InvalidTokenException extends RuntimeException {
 
     public InvalidTokenException(String message, Throwable cause) {
         super(message, cause);
+    }
+
+    @Override
+    public HttpStatus getHttpStatus() {
+        return HttpStatus.UNAUTHORIZED;
+    }
+
+    @Override
+    public String getErrorTitle() {
+        return "Invalid Token";
     }
 }

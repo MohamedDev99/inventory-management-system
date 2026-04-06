@@ -18,6 +18,8 @@ import com.moeware.ims.entity.inventory.Product;
 import com.moeware.ims.exception.inventory.category.CategoryNotFoundException;
 import com.moeware.ims.exception.inventory.product.ProductAlreadyExistsException;
 import com.moeware.ims.exception.inventory.product.ProductNotFoundException;
+import com.moeware.ims.exception.inventory.product.ProductAlreadyExistsException.ConflictField;
+import com.moeware.ims.exception.inventory.product.ProductNotFoundException.LookupField;
 import com.moeware.ims.repository.inventory.CategoryRepository;
 import com.moeware.ims.repository.inventory.ProductRepository;
 
@@ -49,11 +51,11 @@ public class ProductService {
 
         // Validate unique constraints
         if (productRepository.existsBySku(request.getSku())) {
-            throw new ProductAlreadyExistsException("sku", request.getSku());
+            throw new ProductAlreadyExistsException(ConflictField.SKU, request.getSku());
         }
 
         if (request.getBarcode() != null && productRepository.existsByBarcode(request.getBarcode())) {
-            throw new ProductAlreadyExistsException("barcode", request.getBarcode());
+            throw new ProductAlreadyExistsException(ConflictField.BARCODE, request.getBarcode());
         }
 
         // Validate category exists
@@ -103,7 +105,7 @@ public class ProductService {
     public ProductResponse getProductBySku(String sku) {
         log.debug("Fetching product with SKU: {}", sku);
         Product product = productRepository.findBySku(sku)
-                .orElseThrow(() -> new ProductNotFoundException("sku", sku));
+                .orElseThrow(() -> new ProductNotFoundException(LookupField.SKU, sku));
         return mapToResponse(product);
     }
 
@@ -116,7 +118,7 @@ public class ProductService {
     public ProductResponse getProductByBarcode(String barcode) {
         log.debug("Fetching product with barcode: {}", barcode);
         Product product = productRepository.findByBarcode(barcode)
-                .orElseThrow(() -> new ProductNotFoundException("barcode", barcode));
+                .orElseThrow(() -> new ProductNotFoundException(LookupField.BARCODE, barcode));
         return mapToResponse(product);
     }
 
@@ -270,7 +272,7 @@ public class ProductService {
             // Check if barcode is being changed and if new barcode already exists
             if (!request.getBarcode().equals(product.getBarcode()) &&
                     productRepository.existsByBarcode(request.getBarcode())) {
-                throw new ProductAlreadyExistsException("barcode", request.getBarcode());
+                throw new ProductAlreadyExistsException(ConflictField.BARCODE, request.getBarcode());
             }
             product.setBarcode(request.getBarcode());
         }

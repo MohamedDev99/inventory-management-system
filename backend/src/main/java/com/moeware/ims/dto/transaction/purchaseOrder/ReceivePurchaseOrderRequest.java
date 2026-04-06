@@ -8,6 +8,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PastOrPresent;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -26,6 +27,7 @@ public class ReceivePurchaseOrderRequest {
 
     @NotNull(message = "Actual delivery date is required")
     @Schema(description = "Actual date the shipment was received", example = "2026-03-04", requiredMode = Schema.RequiredMode.REQUIRED)
+    @PastOrPresent(message = "Actual delivery date cannot be in the future")
     private LocalDate actualDeliveryDate;
 
     @NotEmpty(message = "At least one item receipt is required")
@@ -48,8 +50,8 @@ public class ReceivePurchaseOrderRequest {
         private Long itemId;
 
         @NotNull(message = "Quantity received is required")
-        @Min(value = 0, message = "Quantity received cannot be negative")
-        @Schema(description = "Actual quantity received for this line item", example = "10", minimum = "0", requiredMode = Schema.RequiredMode.REQUIRED)
+        @Min(value = 1, message = "Quantity received cannot be negative or zero")
+        @Schema(description = "Actual quantity received for this line item", example = "10", minimum = "1", requiredMode = Schema.RequiredMode.REQUIRED)
         private Integer quantityReceived;
     }
 }

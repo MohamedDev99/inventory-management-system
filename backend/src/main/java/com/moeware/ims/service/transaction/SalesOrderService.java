@@ -23,10 +23,13 @@ import com.moeware.ims.entity.staff.Warehouse;
 import com.moeware.ims.entity.transaction.SalesOrder;
 import com.moeware.ims.entity.transaction.SalesOrderItem;
 import com.moeware.ims.enums.transaction.SalesOrderStatus;
-import com.moeware.ims.exception.ResourceNotFoundException;
+import com.moeware.ims.exception.inventory.product.ProductNotFoundException;
+import com.moeware.ims.exception.staff.customer.CustomerNotFoundException;
+import com.moeware.ims.exception.staff.warehouse.WarehouseNotFoundException;
 import com.moeware.ims.exception.transaction.InvalidOrderStatusTransitionException;
 import com.moeware.ims.exception.transaction.OrderNotEditableException;
 import com.moeware.ims.exception.transaction.salesOrder.SalesOrderNotFoundException;
+import com.moeware.ims.exception.user.UserNotFoundException;
 import com.moeware.ims.repository.transaction.SalesOrderRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -93,7 +96,7 @@ public class SalesOrderService {
             Pageable pageable) {
 
         if (!customerRepository.existsById(customerId)) {
-            throw new ResourceNotFoundException("Customer", "id", customerId);
+            throw new CustomerNotFoundException(customerId);
         }
         return salesOrderRepository.findByCustomerIdWithFilters(customerId, status, startDate, endDate, pageable)
                 .map(this::toSummaryResponse);
@@ -109,13 +112,13 @@ public class SalesOrderService {
         log.info("Creating sales order for customer id: {}", request.getCustomerId());
 
         Customer customer = customerRepository.findById(request.getCustomerId())
-                .orElseThrow(() -> new ResourceNotFoundException("Customer", "id", request.getCustomerId()));
+                .orElseThrow(() -> new CustomerNotFoundException(request.getCustomerId()));
 
         Warehouse warehouse = warehouseRepository.findById(request.getWarehouseId())
-                .orElseThrow(() -> new ResourceNotFoundException("Warehouse", "id", request.getWarehouseId()));
+                .orElseThrow(() -> new WarehouseNotFoundException(request.getWarehouseId()));
 
         User createdByUser = userRepository.findById(createdByUserId)
-                .orElseThrow(() -> new ResourceNotFoundException("User", "id", createdByUserId));
+                .orElseThrow(() -> new UserNotFoundException(createdByUserId));
 
         SalesOrder so = SalesOrder.builder()
                 .soNumber(generateSoNumber(request.getOrderDate()))
@@ -138,7 +141,7 @@ public class SalesOrderService {
         // Add line items
         for (SalesOrderItemRequest itemReq : request.getItems()) {
             Product product = productRepository.findById(itemReq.getProductId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Product", "id", itemReq.getProductId()));
+                    .orElseThrow(() -> new ProductNotFoundException(itemReq.getProductId()));
 
             SalesOrderItem item = SalesOrderItem.builder()
                     .product(product)
@@ -170,10 +173,10 @@ public class SalesOrderService {
         }
 
         Customer customer = customerRepository.findById(request.getCustomerId())
-                .orElseThrow(() -> new ResourceNotFoundException("Customer", "id", request.getCustomerId()));
+                .orElseThrow(() -> new CustomerNotFoundException(request.getCustomerId()));
 
         Warehouse warehouse = warehouseRepository.findById(request.getWarehouseId())
-                .orElseThrow(() -> new ResourceNotFoundException("Warehouse", "id", request.getWarehouseId()));
+                .orElseThrow(() -> new WarehouseNotFoundException(request.getWarehouseId()));
 
         so.setCustomer(customer);
         so.setCustomerName(request.getCustomerName());
@@ -192,7 +195,7 @@ public class SalesOrderService {
         so.getItems().clear();
         for (SalesOrderItemRequest itemReq : request.getItems()) {
             Product product = productRepository.findById(itemReq.getProductId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Product", "id", itemReq.getProductId()));
+                    .orElseThrow(() -> new ProductNotFoundException(itemReq.getProductId()));
 
             SalesOrderItem item = SalesOrderItem.builder()
                     .product(product)
@@ -243,7 +246,7 @@ public class SalesOrderService {
         }
 
         User performedBy = userRepository.findById(performedByUserId)
-                .orElseThrow(() -> new ResourceNotFoundException("User", "id", performedByUserId));
+                .orElseThrow(() -> new UserNotFoundException(performedByUserId));
 
         // Deduct stock and create SHIPMENT movement records for each line item
         orderInventoryService.deductInventoryForSalesOrder(order, performedBy);
@@ -311,7 +314,7 @@ public class SalesOrderService {
         // If the order was already fulfilled, we must return stock to the warehouse
         if (order.getStatus() == SalesOrderStatus.FULFILLED) {
             User performedBy = userRepository.findById(performedByUserId)
-                    .orElseThrow(() -> new ResourceNotFoundException("User", "id", performedByUserId));
+                    .orElseThrow(() -> new UserNotFoundException(performedByUserId));
             orderInventoryService.releaseInventoryForCancelledSalesOrder(order, performedBy);
         }
         // PENDING and CONFIRMED cancellations require no inventory action

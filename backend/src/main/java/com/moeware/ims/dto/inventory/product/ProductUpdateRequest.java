@@ -1,8 +1,10 @@
 package com.moeware.ims.dto.inventory.product;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.*;
 
@@ -30,6 +32,7 @@ public class ProductUpdateRequest {
 
     @Schema(description = "Unit of measure", example = "PIECE")
     @Size(max = 20, message = "Unit must not exceed 20 characters")
+    @Pattern(regexp = "^(?!\\s*$).+", message = "Unit must not be blank if provided")
     private String unit;
 
     @Schema(description = "Selling price per unit", example = "1299.99")
@@ -54,8 +57,24 @@ public class ProductUpdateRequest {
 
     @Schema(description = "URL to product image", example = "https://example.com/images/product.jpg")
     @Size(max = 500, message = "Image URL must not exceed 500 characters")
+    @Pattern(regexp = "^(https?://).+", message = "Image URL must be a valid HTTP/HTTPS URL")
     private String imageUrl;
 
     @Schema(description = "Whether the product is active in the catalog", example = "true")
     private Boolean isActive;
+
+    @AssertTrue(message = "Minimum stock level must be less than or equal to reorder level")
+    public boolean isStockLevelsValid() {
+        if (minStockLevel == null || reorderLevel == null)
+            return true;
+        return minStockLevel <= reorderLevel;
+    }
+
+    @AssertTrue(message = "At least one field must be provided for update")
+    public boolean isAtLeastOneFieldPresent() {
+        return name != null || description != null || categoryId != null ||
+                unit != null || unitPrice != null || costPrice != null ||
+                reorderLevel != null || minStockLevel != null ||
+                barcode != null || imageUrl != null || isActive != null;
+    }
 }

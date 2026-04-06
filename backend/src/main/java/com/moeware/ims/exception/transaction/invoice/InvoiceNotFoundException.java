@@ -1,9 +1,15 @@
 package com.moeware.ims.exception.transaction.invoice;
 
-import lombok.Getter;
+import org.springframework.http.HttpStatus;
 
-@Getter
-public class InvoiceNotFoundException extends RuntimeException {
+import com.moeware.ims.exception.BaseAppException;
+
+/**
+ * Thrown when an invoice cannot be found by ID or invoice number.
+ *
+ * @author MoeWare Team
+ */
+public class InvoiceNotFoundException extends BaseAppException {
 
     private final Long invoiceId;
     private final String invoiceNumber;
@@ -18,5 +24,23 @@ public class InvoiceNotFoundException extends RuntimeException {
         super("Invoice not found with number: " + invoiceNumber);
         this.invoiceId = null;
         this.invoiceNumber = invoiceNumber;
+    }
+
+    @Override
+    public HttpStatus getHttpStatus() {
+        return HttpStatus.NOT_FOUND;
+    }
+
+    @Override
+    public String getErrorTitle() {
+        return "Invoice Not Found";
+    }
+
+    public Long getInvoiceId() {
+        return invoiceId;
+    }
+
+    public String getInvoiceNumber() {
+        return invoiceNumber;
     }
 }

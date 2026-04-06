@@ -3,7 +3,9 @@ package com.moeware.ims.dto.transaction.invoice;
 import java.time.LocalDate;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PastOrPresent;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -22,6 +24,7 @@ public class InvoiceRequest {
     private Long salesOrderId;
 
     @NotNull(message = "Invoice date is required")
+    @PastOrPresent(message = "Invoice date cannot be in the future")
     @Schema(description = "Date the invoice is issued", example = "2026-02-09", requiredMode = Schema.RequiredMode.REQUIRED)
     private LocalDate invoiceDate;
 
@@ -35,4 +38,11 @@ public class InvoiceRequest {
 
     @Schema(description = "Additional notes to include on the invoice", example = "Thank you for your business!")
     private String notes;
+
+    @AssertTrue(message = "Due date must be after or equal to invoice date")
+    public boolean isDueDateValid() {
+        if (dueDate == null || invoiceDate == null)
+            return true;
+        return !dueDate.isBefore(invoiceDate);
+    }
 }

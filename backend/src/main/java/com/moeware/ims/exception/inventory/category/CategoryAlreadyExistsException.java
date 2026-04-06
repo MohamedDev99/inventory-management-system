@@ -1,42 +1,41 @@
 package com.moeware.ims.exception.inventory.category;
 
-/**
- * Exception thrown when attempting to create a category that already exists
- */
-public class CategoryAlreadyExistsException extends RuntimeException {
+import org.springframework.http.HttpStatus;
 
-    private final Long categoryId;
+import com.moeware.ims.exception.BaseAppException;
+
+/**
+ * Thrown when attempting to create or update a category with a code or name
+ * that already belongs to another category.
+ *
+ * Uses a {@link ConflictField} enum instead of a raw string field name
+ * to eliminate typo risk and make call sites self-documenting.
+ *
+ * @author MoeWare Team
+ */
+public class CategoryAlreadyExistsException extends BaseAppException {
+
+    public enum ConflictField {
+        CODE, NAME
+    }
+
     private final String code;
     private final String name;
 
-    public CategoryAlreadyExistsException(Long categoryId) {
-        super("Category already exists with id: " + categoryId);
-        this.categoryId = categoryId;
-        this.code = null;
-        this.name = null;
+    public CategoryAlreadyExistsException(ConflictField field, String value) {
+        super(String.format("Category already exists with %s: '%s'", field.name().toLowerCase(), value));
+        this.code = field == ConflictField.CODE ? value : null;
+        this.name = field == ConflictField.NAME ? value : null;
     }
 
-    public CategoryAlreadyExistsException(String fieldName, String fieldValue) {
-        super(String.format("Category already exists with %s: '%s'", fieldName, fieldValue));
-        if ("code".equalsIgnoreCase(fieldName)) {
-            this.code = fieldValue;
-            this.name = null;
-        } else if ("name".equalsIgnoreCase(fieldName)) {
-            this.name = fieldValue;
-            this.code = null;
-        } else {
-            this.code = null;
-            this.name = null;
-        }
-
-        this.categoryId = null;
+    @Override
+    public HttpStatus getHttpStatus() {
+        return HttpStatus.CONFLICT;
     }
 
-    public CategoryAlreadyExistsException(String message) {
-        super(message);
-        this.code = null;
-        this.name = null;
-        this.categoryId = null;
+    @Override
+    public String getErrorTitle() {
+        return "Category Already Exists";
     }
 
     public String getCode() {
@@ -45,9 +44,5 @@ public class CategoryAlreadyExistsException extends RuntimeException {
 
     public String getName() {
         return name;
-    }
-
-    public Long getCategoryId() {
-        return categoryId;
     }
 }

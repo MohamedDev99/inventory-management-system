@@ -1,18 +1,17 @@
 package com.moeware.ims.exception.transaction.payment;
 
+import org.springframework.http.HttpStatus;
+
+import com.moeware.ims.exception.BaseAppException;
 import com.moeware.ims.enums.transaction.PaymentStatus;
-import lombok.Getter;
 
 /**
  * Thrown when a refund is attempted on a payment that is not in COMPLETED
- * status.
+ * status. Only COMPLETED payments are eligible for refund.
  *
- * Only COMPLETED payments can be refunded. PENDING payments should be voided
- * instead,
- * and FAILED payments have never settled so there is nothing to return.
+ * @author MoeWare Team
  */
-@Getter
-public class PaymentNotRefundableException extends RuntimeException {
+public class PaymentNotRefundableException extends BaseAppException {
 
     private final Long paymentId;
     private final PaymentStatus currentStatus;
@@ -24,5 +23,23 @@ public class PaymentNotRefundableException extends RuntimeException {
                 paymentId, currentStatus));
         this.paymentId = paymentId;
         this.currentStatus = currentStatus;
+    }
+
+    @Override
+    public HttpStatus getHttpStatus() {
+        return HttpStatus.CONFLICT;
+    }
+
+    @Override
+    public String getErrorTitle() {
+        return "Payment Not Refundable";
+    }
+
+    public Long getPaymentId() {
+        return paymentId;
+    }
+
+    public PaymentStatus getCurrentStatus() {
+        return currentStatus;
     }
 }

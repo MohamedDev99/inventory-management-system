@@ -1,5 +1,7 @@
 package com.moeware.ims.controller.staff;
 
+import java.time.LocalDate;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -18,7 +20,17 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.moeware.ims.dto.ApiResponseWpp;
-import com.moeware.ims.dto.staff.customer.CustomerDTO;
+import com.moeware.ims.dto.staff.customer.CustomerCreateRequest;
+import com.moeware.ims.dto.staff.customer.CustomerResponse;
+import com.moeware.ims.dto.staff.customer.CustomerStatementResponse;
+import com.moeware.ims.dto.staff.customer.CustomerUpdateRequest;
+import com.moeware.ims.dto.transaction.invoice.InvoiceResponse;
+import com.moeware.ims.dto.transaction.payment.PaymentResponse;
+import com.moeware.ims.dto.transaction.salesOrder.SalesOrderSummaryResponse;
+import com.moeware.ims.enums.transaction.InvoiceStatus;
+import com.moeware.ims.enums.transaction.PaymentMethod;
+import com.moeware.ims.enums.transaction.PaymentStatus;
+import com.moeware.ims.enums.transaction.SalesOrderStatus;
 import com.moeware.ims.service.staff.CustomerService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -33,8 +45,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * REST Controller for Customer management
- * Provides endpoints for CRUD operations on customers
+ * REST Controller for Customer management.
+ * Provides endpoints for CRUD operations on customers.
+ * All responses are wrapped in {@link ApiResponseWpp}.
  */
 @RestController
 @RequestMapping("/api/customers")
@@ -43,268 +56,322 @@ import lombok.extern.slf4j.Slf4j;
 @Tag(name = "Customers", description = "Customer management APIs")
 public class CustomerController {
 
-    private final CustomerService customerService;
+        private final CustomerService customerService;
 
-    /**
-     * Get all customers with pagination and filters
-     */
-    @Operation(summary = "Get all customers", description = "Retrieve a paginated list of customers with optional filters for type, active status, city, country, and search term")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Successfully retrieved customers", content = @Content(schema = @Schema(implementation = Page.class))),
-            @ApiResponse(responseCode = "400", description = "Invalid parameters", content = @Content),
-            @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
-    })
-    @GetMapping
-    public ResponseEntity<ApiResponseWpp<Page<CustomerDTO>>> getAllCustomers(
-            @Parameter(description = "Filter by customer type (RETAIL, WHOLESALE, CORPORATE)") @RequestParam(required = false) String customerType,
-            @Parameter(description = "Filter by active status") @RequestParam(required = false) Boolean isActive,
-            @Parameter(description = "Filter by city") @RequestParam(required = false) String city,
-            @Parameter(description = "Filter by country") @RequestParam(required = false) String country,
-            @Parameter(description = "Search by name, code, email, or company") @RequestParam(required = false) String search,
-            @PageableDefault(size = 20, sort = "contactName", direction = Sort.Direction.ASC) Pageable pageable) {
+        // =========================================================================
+        // CRUD
+        // =========================================================================
 
-        log.info("GET /api/customers - Fetching customers with filters");
+        @Operation(summary = "Get all customers", description = "Retrieve a paginated list of customers with optional filters for type, active status, city, country, and search term")
+        @ApiResponses(value = {
+                        @ApiResponse(responseCode = "200", description = "Successfully retrieved customers", content = @Content(schema = @Schema(implementation = Page.class))),
+                        @ApiResponse(responseCode = "400", description = "Invalid parameters", content = @Content),
+                        @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
+        })
+        @GetMapping
+        public ResponseEntity<ApiResponseWpp<Page<CustomerResponse>>> getAllCustomers(
+                        @Parameter(description = "Filter by customer type (RETAIL, WHOLESALE, CORPORATE)") @RequestParam(required = false) String customerType,
+                        @Parameter(description = "Filter by active status") @RequestParam(required = false) Boolean isActive,
+                        @Parameter(description = "Filter by city") @RequestParam(required = false) String city,
+                        @Parameter(description = "Filter by country") @RequestParam(required = false) String country,
+                        @Parameter(description = "Search by name, code, email, or company") @RequestParam(required = false) String search,
+                        @PageableDefault(size = 20, sort = "contactName", direction = Sort.Direction.ASC) Pageable pageable) {
 
-        Page<CustomerDTO> customers = customerService.getAllCustomers(
-                customerType, isActive, city, country, search, pageable);
+                log.info("GET /api/customers - Fetching customers with filters");
 
-        return ResponseEntity.ok(ApiResponseWpp.success(customers));
-    }
+                Page<CustomerResponse> customers = customerService.getAllCustomers(
+                                customerType, isActive, city, country, search, pageable);
 
-    /**
-     * Get customer by ID
-     */
-    @Operation(summary = "Get customer by ID", description = "Retrieve detailed information about a specific customer")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Customer found", content = @Content(schema = @Schema(implementation = CustomerDTO.class))),
-            @ApiResponse(responseCode = "404", description = "Customer not found", content = @Content),
-            @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
-    })
-    @GetMapping("/{id}")
-    public ResponseEntity<CustomerDTO> getCustomerById(
-            @Parameter(description = "Customer ID", required = true) @PathVariable Long id) {
+                return ResponseEntity.ok(ApiResponseWpp.success(customers, "Customers retrieved successfully"));
+        }
 
-        log.info("GET /api/customers/{} - Fetching customer", id);
+        @Operation(summary = "Get customer by ID", description = "Retrieve detailed information about a specific customer")
+        @ApiResponses(value = {
+                        @ApiResponse(responseCode = "200", description = "Customer found", content = @Content(schema = @Schema(implementation = CustomerResponse.class))),
+                        @ApiResponse(responseCode = "404", description = "Customer not found", content = @Content),
+                        @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
+        })
+        @GetMapping("/{id}")
+        public ResponseEntity<ApiResponseWpp<CustomerResponse>> getCustomerById(
+                        @Parameter(description = "Customer ID", required = true) @PathVariable Long id) {
 
-        CustomerDTO customer = customerService.getCustomerById(id);
-        return ResponseEntity.ok(customer);
-    }
+                log.info("GET /api/customers/{} - Fetching customer", id);
 
-    /**
-     * Get customer by code
-     */
-    @Operation(summary = "Get customer by code", description = "Retrieve customer information using the unique customer code")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Customer found", content = @Content(schema = @Schema(implementation = CustomerDTO.class))),
-            @ApiResponse(responseCode = "404", description = "Customer not found", content = @Content),
-            @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
-    })
-    @GetMapping("/code/{code}")
-    public ResponseEntity<CustomerDTO> getCustomerByCode(
-            @Parameter(description = "Customer code", required = true) @PathVariable String code) {
+                return ResponseEntity.ok(ApiResponseWpp.success(
+                                customerService.getCustomerById(id), "Customer retrieved successfully"));
+        }
 
-        log.info("GET /api/customers/code/{} - Fetching customer by code", code);
+        @Operation(summary = "Get customer by code", description = "Retrieve customer information using the unique customer code")
+        @ApiResponses(value = {
+                        @ApiResponse(responseCode = "200", description = "Customer found", content = @Content(schema = @Schema(implementation = CustomerResponse.class))),
+                        @ApiResponse(responseCode = "404", description = "Customer not found", content = @Content),
+                        @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
+        })
+        @GetMapping("/code/{code}")
+        public ResponseEntity<ApiResponseWpp<CustomerResponse>> getCustomerByCode(
+                        @Parameter(description = "Customer code", required = true) @PathVariable String code) {
 
-        CustomerDTO customer = customerService.getCustomerByCode(code);
-        return ResponseEntity.ok(customer);
-    }
+                log.info("GET /api/customers/code/{} - Fetching customer by code", code);
 
-    /**
-     * Create a new customer
-     */
-    @Operation(summary = "Create a new customer", description = "Add a new customer to the system")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "201", description = "Customer created successfully", content = @Content(schema = @Schema(implementation = CustomerDTO.class))),
-            @ApiResponse(responseCode = "400", description = "Invalid input or duplicate code/email", content = @Content),
-            @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
-    })
-    @PostMapping
-    public ResponseEntity<CustomerDTO> createCustomer(
-            @Parameter(description = "Customer data", required = true) @Valid @RequestBody CustomerDTO customerDTO) {
+                return ResponseEntity.ok(ApiResponseWpp.success(
+                                customerService.getCustomerByCode(code), "Customer retrieved successfully"));
+        }
 
-        log.info("POST /api/customers - Creating new customer with code: {}", customerDTO.getCustomerCode());
+        @Operation(summary = "Create a new customer", description = "Add a new customer to the system")
+        @ApiResponses(value = {
+                        @ApiResponse(responseCode = "201", description = "Customer created successfully", content = @Content(schema = @Schema(implementation = CustomerResponse.class))),
+                        @ApiResponse(responseCode = "400", description = "Invalid input or duplicate code/email", content = @Content),
+                        @ApiResponse(responseCode = "409", description = "Conflict — customer code or email already exists", content = @Content),
+                        @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
+        })
+        @PostMapping
+        public ResponseEntity<ApiResponseWpp<CustomerResponse>> createCustomer(
+                        @Parameter(description = "Customer creation payload", required = true) @Valid @RequestBody CustomerCreateRequest request) {
 
-        CustomerDTO createdCustomer = customerService.createCustomer(customerDTO);
-        return ResponseEntity.status(HttpStatus.CREATED).body(createdCustomer);
-    }
+                log.info("POST /api/customers - Creating new customer with code: {}", request.getCustomerCode());
 
-    /**
-     * Update customer (full update)
-     */
-    @Operation(summary = "Update customer", description = "Perform a full update of an existing customer")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Customer updated successfully", content = @Content(schema = @Schema(implementation = CustomerDTO.class))),
-            @ApiResponse(responseCode = "400", description = "Invalid input", content = @Content),
-            @ApiResponse(responseCode = "404", description = "Customer not found", content = @Content),
-            @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
-    })
-    @PutMapping("/{id}")
-    public ResponseEntity<CustomerDTO> updateCustomer(
-            @Parameter(description = "Customer ID", required = true) @PathVariable Long id,
-            @Parameter(description = "Updated customer data", required = true) @Valid @RequestBody CustomerDTO customerDTO) {
+                return ResponseEntity
+                                .status(HttpStatus.CREATED)
+                                .body(ApiResponseWpp.success(
+                                                customerService.createCustomer(request),
+                                                "Customer created successfully"));
+        }
 
-        log.info("PUT /api/customers/{} - Updating customer", id);
+        @Operation(summary = "Update customer (full)", description = "Perform a full update of an existing customer. All updatable fields are applied.")
+        @ApiResponses(value = {
+                        @ApiResponse(responseCode = "200", description = "Customer updated successfully", content = @Content(schema = @Schema(implementation = CustomerResponse.class))),
+                        @ApiResponse(responseCode = "400", description = "Invalid input", content = @Content),
+                        @ApiResponse(responseCode = "404", description = "Customer not found", content = @Content),
+                        @ApiResponse(responseCode = "409", description = "Conflict — duplicate email", content = @Content),
+                        @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
+        })
+        @PutMapping("/{id}")
+        public ResponseEntity<ApiResponseWpp<CustomerResponse>> updateCustomer(
+                        @Parameter(description = "Customer ID", required = true) @PathVariable Long id,
+                        @Parameter(description = "Full update payload", required = true) @Valid @RequestBody CustomerUpdateRequest request) {
 
-        CustomerDTO updatedCustomer = customerService.updateCustomer(id, customerDTO);
-        return ResponseEntity.ok(updatedCustomer);
-    }
+                log.info("PUT /api/customers/{} - Updating customer", id);
 
-    /**
-     * Partial update customer
-     */
-    @Operation(summary = "Partially update customer", description = "Update specific fields of an existing customer")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Customer updated successfully", content = @Content(schema = @Schema(implementation = CustomerDTO.class))),
-            @ApiResponse(responseCode = "400", description = "Invalid input", content = @Content),
-            @ApiResponse(responseCode = "404", description = "Customer not found", content = @Content),
-            @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
-    })
-    @PatchMapping("/{id}")
-    public ResponseEntity<CustomerDTO> patchCustomer(
-            @Parameter(description = "Customer ID", required = true) @PathVariable Long id,
-            @Parameter(description = "Partial customer data", required = true) @RequestBody CustomerDTO customerDTO) {
+                return ResponseEntity.ok(ApiResponseWpp.success(
+                                customerService.updateCustomer(id, request), "Customer updated successfully"));
+        }
 
-        log.info("PATCH /api/customers/{} - Partially updating customer", id);
+        @Operation(summary = "Patch customer (partial)", description = "Partially update a customer. Only non-null fields in the request body are applied.")
+        @ApiResponses(value = {
+                        @ApiResponse(responseCode = "200", description = "Customer updated successfully", content = @Content(schema = @Schema(implementation = CustomerResponse.class))),
+                        @ApiResponse(responseCode = "400", description = "Invalid input or empty body", content = @Content),
+                        @ApiResponse(responseCode = "404", description = "Customer not found", content = @Content),
+                        @ApiResponse(responseCode = "409", description = "Conflict — duplicate email", content = @Content),
+                        @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
+        })
+        @PatchMapping("/{id}")
+        public ResponseEntity<ApiResponseWpp<CustomerResponse>> patchCustomer(
+                        @Parameter(description = "Customer ID", required = true) @PathVariable Long id,
+                        @Parameter(description = "Partial update payload", required = true) @Valid @RequestBody CustomerUpdateRequest request) {
 
-        CustomerDTO updatedCustomer = customerService.patchCustomer(id, customerDTO);
-        return ResponseEntity.ok(updatedCustomer);
-    }
+                log.info("PATCH /api/customers/{} - Partially updating customer", id);
 
-    /**
-     * Soft delete customer (deactivate)
-     */
-    @Operation(summary = "Delete customer", description = "Soft delete a customer by setting isActive to false. Cannot delete customers with pending orders.")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "204", description = "Customer deleted successfully", content = @Content),
-            @ApiResponse(responseCode = "404", description = "Customer not found", content = @Content),
-            @ApiResponse(responseCode = "409", description = "Cannot delete customer with pending orders", content = @Content),
-            @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
-    })
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteCustomer(
-            @Parameter(description = "Customer ID", required = true) @PathVariable Long id) {
+                return ResponseEntity.ok(ApiResponseWpp.success(
+                                customerService.patchCustomer(id, request), "Customer updated successfully"));
+        }
 
-        log.info("DELETE /api/customers/{} - Soft deleting customer", id);
+        @Operation(summary = "Delete customer", description = "Soft-delete a customer by setting isActive to false. Blocked if the customer has pending orders.")
+        @ApiResponses(value = {
+                        @ApiResponse(responseCode = "200", description = "Customer deactivated successfully", content = @Content),
+                        @ApiResponse(responseCode = "404", description = "Customer not found", content = @Content),
+                        @ApiResponse(responseCode = "409", description = "Cannot delete — customer has pending orders", content = @Content),
+                        @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
+        })
+        @DeleteMapping("/{id}")
+        public ResponseEntity<ApiResponseWpp<Void>> deleteCustomer(
+                        @Parameter(description = "Customer ID", required = true) @PathVariable Long id) {
 
-        customerService.deleteCustomer(id);
-        return ResponseEntity.noContent().build();
-    }
+                log.info("DELETE /api/customers/{} - Soft deleting customer", id);
 
-    /**
-     * Get retail customers
-     */
-    @Operation(summary = "Get retail customers", description = "Retrieve all active retail customers")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Successfully retrieved retail customers", content = @Content(schema = @Schema(implementation = Page.class))),
-            @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
-    })
-    @GetMapping("/retail")
-    public ResponseEntity<Page<CustomerDTO>> getRetailCustomers(
-            @PageableDefault(size = 20, sort = "contactName", direction = Sort.Direction.ASC) Pageable pageable) {
+                customerService.deleteCustomer(id);
+                return ResponseEntity.ok(ApiResponseWpp.success(null, "Customer deactivated successfully"));
+        }
 
-        log.info("GET /api/customers/retail - Fetching retail customers");
+        // =========================================================================
+        // Segmented listing
+        // =========================================================================
 
-        Page<CustomerDTO> customers = customerService.getRetailCustomers(pageable);
-        return ResponseEntity.ok(customers);
-    }
+        @Operation(summary = "Get retail customers", description = "Retrieve all active retail customers")
+        @ApiResponses(value = {
+                        @ApiResponse(responseCode = "200", description = "Successfully retrieved retail customers", content = @Content(schema = @Schema(implementation = Page.class))),
+                        @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
+        })
+        @GetMapping("/retail")
+        public ResponseEntity<ApiResponseWpp<Page<CustomerResponse>>> getRetailCustomers(
+                        @PageableDefault(size = 20, sort = "contactName", direction = Sort.Direction.ASC) Pageable pageable) {
 
-    /**
-     * Get wholesale customers
-     */
-    @Operation(summary = "Get wholesale customers", description = "Retrieve all active wholesale customers")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Successfully retrieved wholesale customers", content = @Content(schema = @Schema(implementation = Page.class))),
-            @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
-    })
-    @GetMapping("/wholesale")
-    public ResponseEntity<Page<CustomerDTO>> getWholesaleCustomers(
-            @PageableDefault(size = 20, sort = "contactName", direction = Sort.Direction.ASC) Pageable pageable) {
+                log.info("GET /api/customers/retail - Fetching retail customers");
+                return ResponseEntity.ok(ApiResponseWpp.success(
+                                customerService.getRetailCustomers(pageable),
+                                "Retail customers retrieved successfully"));
+        }
 
-        log.info("GET /api/customers/wholesale - Fetching wholesale customers");
+        @Operation(summary = "Get wholesale customers", description = "Retrieve all active wholesale customers")
+        @ApiResponses(value = {
+                        @ApiResponse(responseCode = "200", description = "Successfully retrieved wholesale customers", content = @Content(schema = @Schema(implementation = Page.class))),
+                        @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
+        })
+        @GetMapping("/wholesale")
+        public ResponseEntity<ApiResponseWpp<Page<CustomerResponse>>> getWholesaleCustomers(
+                        @PageableDefault(size = 20, sort = "contactName", direction = Sort.Direction.ASC) Pageable pageable) {
 
-        Page<CustomerDTO> customers = customerService.getWholesaleCustomers(pageable);
-        return ResponseEntity.ok(customers);
-    }
+                log.info("GET /api/customers/wholesale - Fetching wholesale customers");
+                return ResponseEntity.ok(ApiResponseWpp.success(
+                                customerService.getWholesaleCustomers(pageable),
+                                "Wholesale customers retrieved successfully"));
+        }
 
-    /**
-     * Get corporate customers
-     */
-    @Operation(summary = "Get corporate customers", description = "Retrieve all active corporate customers")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Successfully retrieved corporate customers", content = @Content(schema = @Schema(implementation = Page.class))),
-            @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
-    })
-    @GetMapping("/corporate")
-    public ResponseEntity<Page<CustomerDTO>> getCorporateCustomers(
-            @PageableDefault(size = 20, sort = "companyName", direction = Sort.Direction.ASC) Pageable pageable) {
+        @Operation(summary = "Get corporate customers", description = "Retrieve all active corporate customers")
+        @ApiResponses(value = {
+                        @ApiResponse(responseCode = "200", description = "Successfully retrieved corporate customers", content = @Content(schema = @Schema(implementation = Page.class))),
+                        @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
+        })
+        @GetMapping("/corporate")
+        public ResponseEntity<ApiResponseWpp<Page<CustomerResponse>>> getCorporateCustomers(
+                        @PageableDefault(size = 20, sort = "companyName", direction = Sort.Direction.ASC) Pageable pageable) {
 
-        log.info("GET /api/customers/corporate - Fetching corporate customers");
+                log.info("GET /api/customers/corporate - Fetching corporate customers");
+                return ResponseEntity.ok(ApiResponseWpp.success(
+                                customerService.getCorporateCustomers(pageable),
+                                "Corporate customers retrieved successfully"));
+        }
 
-        Page<CustomerDTO> customers = customerService.getCorporateCustomers(pageable);
-        return ResponseEntity.ok(customers);
-    }
+        // =========================================================================
+        // Search & counts
+        // =========================================================================
 
-    /**
-     * Search customers
-     */
-    @Operation(summary = "Search customers", description = "Search customers by name, code, email, or company name")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Search completed successfully", content = @Content(schema = @Schema(implementation = Page.class))),
-            @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
-    })
-    @GetMapping("/search")
-    public ResponseEntity<Page<CustomerDTO>> searchCustomers(
-            @Parameter(description = "Search term", required = true) @RequestParam String term,
-            @PageableDefault(size = 20, sort = "contactName", direction = Sort.Direction.ASC) Pageable pageable) {
+        @Operation(summary = "Search customers", description = "Search customers by name, code, email, or company name")
+        @ApiResponses(value = {
+                        @ApiResponse(responseCode = "200", description = "Search completed successfully", content = @Content(schema = @Schema(implementation = Page.class))),
+                        @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
+        })
+        @GetMapping("/search")
+        public ResponseEntity<ApiResponseWpp<Page<CustomerResponse>>> searchCustomers(
+                        @Parameter(description = "Search term", required = true) @RequestParam String term,
+                        @PageableDefault(size = 20, sort = "contactName", direction = Sort.Direction.ASC) Pageable pageable) {
 
-        log.info("GET /api/customers/search?term={} - Searching customers", term);
+                log.info("GET /api/customers/search?term={} - Searching customers", term);
+                return ResponseEntity.ok(ApiResponseWpp.success(
+                                customerService.searchCustomers(term, pageable), "Search completed successfully"));
+        }
 
-        Page<CustomerDTO> customers = customerService.searchCustomers(term, pageable);
-        return ResponseEntity.ok(customers);
-    }
+        @Operation(summary = "Get active customer count", description = "Get the total number of active customers")
+        @ApiResponses(value = {
+                        @ApiResponse(responseCode = "200", description = "Count retrieved successfully", content = @Content),
+                        @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
+        })
+        @GetMapping("/count/active")
+        public ResponseEntity<ApiResponseWpp<Long>> getActiveCustomerCount() {
+                log.info("GET /api/customers/count/active - Getting active customer count");
+                return ResponseEntity.ok(ApiResponseWpp.success(
+                                customerService.getActiveCustomerCount(),
+                                "Active customer count retrieved successfully"));
+        }
 
-    /**
-     * Get active customer count
-     */
-    @Operation(summary = "Get active customer count", description = "Get the total number of active customers")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Count retrieved successfully", content = @Content),
-            @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
-    })
-    @GetMapping("/count/active")
-    public ResponseEntity<Long> getActiveCustomerCount() {
+        @Operation(summary = "Get customer count by type", description = "Get the number of customers for a specific type (RETAIL, WHOLESALE, CORPORATE)")
+        @ApiResponses(value = {
+                        @ApiResponse(responseCode = "200", description = "Count retrieved successfully", content = @Content),
+                        @ApiResponse(responseCode = "400", description = "Invalid customer type", content = @Content),
+                        @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
+        })
+        @GetMapping("/count/type/{type}")
+        public ResponseEntity<ApiResponseWpp<Long>> getCustomerCountByType(
+                        @Parameter(description = "Customer type (RETAIL, WHOLESALE, CORPORATE)", required = true) @PathVariable String type) {
 
-        log.info("GET /api/customers/count/active - Getting active customer count");
+                log.info("GET /api/customers/count/type/{} - Getting customer count by type", type);
+                return ResponseEntity.ok(ApiResponseWpp.success(
+                                customerService.getCustomerCountByType(type.toUpperCase()),
+                                "Customer count retrieved successfully"));
+        }
 
-        Long count = customerService.getActiveCustomerCount();
-        return ResponseEntity.ok(count);
-    }
+        // =========================================================================
+        // Sub-resource endpoints
+        // =========================================================================
 
-    /**
-     * Get customer count by type
-     */
-    @Operation(summary = "Get customer count by type", description = "Get the number of customers for a specific type (RETAIL, WHOLESALE, CORPORATE)")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Count retrieved successfully", content = @Content),
-            @ApiResponse(responseCode = "400", description = "Invalid customer type", content = @Content),
-            @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
-    })
-    @GetMapping("/count/type/{type}")
-    public ResponseEntity<Long> getCustomerCountByType(
-            @Parameter(description = "Customer type (RETAIL, WHOLESALE, CORPORATE)", required = true) @PathVariable String type) {
+        @Operation(summary = "Get customer's sales orders", description = "Retrieve a paginated list of sales orders placed by this customer")
+        @ApiResponses(value = {
+                        @ApiResponse(responseCode = "200", description = "Successfully retrieved orders", content = @Content(schema = @Schema(implementation = Page.class))),
+                        @ApiResponse(responseCode = "404", description = "Customer not found", content = @Content),
+                        @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
+        })
+        @GetMapping("/{id}/orders")
+        public ResponseEntity<ApiResponseWpp<Page<SalesOrderSummaryResponse>>> getCustomerOrders(
+                        @Parameter(description = "Customer ID", required = true) @PathVariable Long id,
+                        @Parameter(description = "Filter by order status") @RequestParam(required = false) SalesOrderStatus status,
+                        @Parameter(description = "Filter from date (inclusive)") @RequestParam(required = false) LocalDate startDate,
+                        @Parameter(description = "Filter to date (inclusive)") @RequestParam(required = false) LocalDate endDate,
+                        @PageableDefault(size = 20, sort = "orderDate", direction = Sort.Direction.DESC) Pageable pageable) {
 
-        log.info("GET /api/customers/count/type/{} - Getting customer count by type", type);
+                log.info("GET /api/customers/{}/orders - Fetching sales orders for customer", id);
+                return ResponseEntity.ok(ApiResponseWpp.success(
+                                customerService.getCustomerOrders(id, status, startDate, endDate, pageable),
+                                "Customer orders retrieved successfully"));
+        }
 
-        Long count = customerService.getCustomerCountByType(type.toUpperCase());
-        return ResponseEntity.ok(count);
-    }
+        @Operation(summary = "Get customer's invoices", description = "Retrieve a paginated list of invoices issued to this customer")
+        @ApiResponses(value = {
+                        @ApiResponse(responseCode = "200", description = "Successfully retrieved invoices", content = @Content(schema = @Schema(implementation = Page.class))),
+                        @ApiResponse(responseCode = "404", description = "Customer not found", content = @Content),
+                        @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
+        })
+        @GetMapping("/{id}/invoices")
+        public ResponseEntity<ApiResponseWpp<Page<InvoiceResponse>>> getCustomerInvoices(
+                        @Parameter(description = "Customer ID", required = true) @PathVariable Long id,
+                        @Parameter(description = "Filter by invoice status") @RequestParam(required = false) InvoiceStatus invoiceStatus,
+                        @Parameter(description = "Filter from date (inclusive)") @RequestParam(required = false) LocalDate startDate,
+                        @Parameter(description = "Filter to date (inclusive)") @RequestParam(required = false) LocalDate endDate,
+                        @Parameter(description = "Show only overdue invoices") @RequestParam(required = false) Boolean overdue,
+                        @PageableDefault(size = 20, sort = "invoiceDate", direction = Sort.Direction.DESC) Pageable pageable) {
 
-    // Note: Additional endpoints for orders, invoices, payments, and statements
-    // would be implemented here
-    // These require SalesOrder, Invoice, and Payment entities and repositories to
-    // be implemented first
-    // GET /api/v1/customers/{id}/orders
-    // GET /api/v1/customers/{id}/invoices
-    // GET /api/v1/customers/{id}/payments
-    // GET /api/v1/customers/{id}/statement
+                log.info("GET /api/customers/{}/invoices - Fetching invoices for customer", id);
+                return ResponseEntity.ok(ApiResponseWpp.success(
+                                customerService.getCustomerInvoices(id, invoiceStatus, startDate, endDate, overdue,
+                                                pageable),
+                                "Customer invoices retrieved successfully"));
+        }
+
+        @Operation(summary = "Get customer's payment history", description = "Retrieve a paginated list of payments made by this customer")
+        @ApiResponses(value = {
+                        @ApiResponse(responseCode = "200", description = "Successfully retrieved payments", content = @Content(schema = @Schema(implementation = Page.class))),
+                        @ApiResponse(responseCode = "404", description = "Customer not found", content = @Content),
+                        @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
+        })
+        @GetMapping("/{id}/payments")
+        public ResponseEntity<ApiResponseWpp<Page<PaymentResponse>>> getCustomerPayments(
+                        @Parameter(description = "Customer ID", required = true) @PathVariable Long id,
+                        @Parameter(description = "Filter by payment status") @RequestParam(required = false) PaymentStatus paymentStatus,
+                        @Parameter(description = "Filter by payment method") @RequestParam(required = false) PaymentMethod paymentMethod,
+                        @Parameter(description = "Filter from date (inclusive)") @RequestParam(required = false) LocalDate startDate,
+                        @Parameter(description = "Filter to date (inclusive)") @RequestParam(required = false) LocalDate endDate,
+                        @PageableDefault(size = 20, sort = "paymentDate", direction = Sort.Direction.DESC) Pageable pageable) {
+
+                log.info("GET /api/customers/{}/payments - Fetching payment history for customer", id);
+                return ResponseEntity.ok(ApiResponseWpp.success(
+                                customerService.getCustomerPayments(id, paymentStatus, paymentMethod, startDate,
+                                                endDate, pageable),
+                                "Customer payment history retrieved successfully"));
+        }
+
+        @Operation(summary = "Get customer account statement", description = "Returns a chronological ledger of all invoices and payments within the date range, plus running balance, credit limit, and totals")
+        @ApiResponses(value = {
+                        @ApiResponse(responseCode = "200", description = "Statement retrieved successfully", content = @Content),
+                        @ApiResponse(responseCode = "404", description = "Customer not found", content = @Content),
+                        @ApiResponse(responseCode = "500", description = "Internal server error", content = @Content)
+        })
+        @GetMapping("/{id}/statement")
+        public ResponseEntity<ApiResponseWpp<CustomerStatementResponse>> getCustomerStatement(
+                        @Parameter(description = "Customer ID", required = true) @PathVariable Long id,
+                        @Parameter(description = "Statement start date") @RequestParam(required = false) LocalDate startDate,
+                        @Parameter(description = "Statement end date") @RequestParam(required = false) LocalDate endDate) {
+
+                log.info("GET /api/customers/{}/statement - Fetching account statement for customer", id);
+                return ResponseEntity.ok(ApiResponseWpp.success(
+                                customerService.getCustomerStatement(id, startDate, endDate),
+                                "Customer statement retrieved successfully"));
+        }
 }

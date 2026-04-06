@@ -2,6 +2,7 @@ package com.moeware.ims.dto.auth;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import jakarta.validation.constraints.AssertTrue;
 import lombok.AllArgsConstructor;
@@ -27,10 +28,13 @@ public class ChangePasswordDto {
     @Schema(description = "New password (min 8 characters)", example = "NewSecurePass456!", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotBlank(message = "New password is required")
     @Size(min = 8, max = 100, message = "Password must be between 8 and 100 characters")
+    @Pattern(regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]{8,}$", message = "Password must contain at least one uppercase letter, one lowercase letter, one digit, and one special character (@$!%*?&)")
     private String newPassword;
 
     @Schema(description = "Confirmation of new password (must match newPassword)", example = "NewSecurePass456!", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotBlank(message = "Password confirmation is required")
+    @Size(min = 8, max = 100, message = "Password must be between 8 and 100 characters")
+    @Pattern(regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]{8,}$", message = "Password must contain at least one uppercase letter, one lowercase letter, one digit, and one special character (@$!%*?&)")
     private String confirmPassword;
 
     /**
@@ -38,6 +42,8 @@ public class ChangePasswordDto {
      */
     @AssertTrue(message = "New password and confirmation do not match")
     public boolean passwordsMatch() {
-        return newPassword != null && newPassword.equals(confirmPassword);
+        if (newPassword == null || confirmPassword == null)
+            return true;
+        return newPassword.equals(confirmPassword);
     }
 }

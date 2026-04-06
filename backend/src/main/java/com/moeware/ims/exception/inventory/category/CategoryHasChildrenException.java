@@ -1,32 +1,36 @@
 package com.moeware.ims.exception.inventory.category;
 
+import org.springframework.http.HttpStatus;
+
+import com.moeware.ims.exception.BaseAppException;
+
 /**
- * Exception thrown when attempting to delete a category that has child
- * categories
+ * Thrown when attempting to delete a category that still has child categories.
+ *
+ * @author MoeWare Team
  */
-public class CategoryHasChildrenException extends RuntimeException {
+public class CategoryHasChildrenException extends BaseAppException {
 
     private final Long categoryId;
-    // private final long childCount;
 
     public CategoryHasChildrenException(Long categoryId) {
-        super(String.format("Cannot delete category with id: %d. " +
-                "Please delete or reassign child categories first.", categoryId));
+        super(String.format(
+                "Cannot delete category with id: %d. Please delete or reassign child categories first.",
+                categoryId));
         this.categoryId = categoryId;
-        // this.childCount = childCount;
     }
 
-    public CategoryHasChildrenException(String message) {
-        super(message);
-        this.categoryId = null;
-        // this.childCount = 0;
+    @Override
+    public HttpStatus getHttpStatus() {
+        return HttpStatus.CONFLICT;
+    }
+
+    @Override
+    public String getErrorTitle() {
+        return "Category Has Children";
     }
 
     public Long getCategoryId() {
         return categoryId;
     }
-
-    // public long getChildCount() {
-    // return childCount;
-    // }
 }

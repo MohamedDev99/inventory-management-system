@@ -27,7 +27,7 @@ import com.moeware.ims.dto.transaction.purchaseOrder.PurchaseOrderResponse;
 import com.moeware.ims.dto.transaction.purchaseOrder.PurchaseOrderSummaryResponse;
 import com.moeware.ims.dto.transaction.purchaseOrder.ReceivePurchaseOrderRequest;
 import com.moeware.ims.enums.transaction.PurchaseOrderStatus;
-import com.moeware.ims.exception.GlobalExceptionHandler;
+import com.moeware.ims.exception.handler.GlobalExceptionHandler;
 import com.moeware.ims.service.transaction.PurchaseOrderService;
 
 import io.swagger.v3.oas.annotations.Operation;

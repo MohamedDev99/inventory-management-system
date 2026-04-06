@@ -16,6 +16,7 @@ import com.moeware.ims.entity.transaction.PurchaseOrderItem;
 import com.moeware.ims.entity.transaction.SalesOrder;
 import com.moeware.ims.entity.transaction.SalesOrderItem;
 import com.moeware.ims.enums.transaction.MovementType;
+import com.moeware.ims.exception.inventory.inventoryItem.InventoryItemNotFoundException;
 import com.moeware.ims.exception.transaction.stockAdjustment.InsufficientStockException;
 import com.moeware.ims.repository.inventory.InventoryItemRepository;
 import com.moeware.ims.repository.transaction.InventoryMovementRepository;
@@ -85,19 +86,12 @@ public class OrderInventoryService {
 
                         InventoryItem inventory = inventoryItemRepository
                                         .findByProductAndWarehouse(product, warehouse)
-                                        .orElseThrow(() -> new InsufficientStockException(
-                                                        String.format("Product '%s' (SKU: %s) is not stocked in warehouse '%s'.",
-                                                                        product.getName(), product.getSku(),
-                                                                        warehouse.getName())));
+                                        .orElseThrow(() -> new InventoryItemNotFoundException(product.getId(),
+                                                        warehouse.getId()));
 
                         if (inventory.getQuantity() < requested) {
-                                throw new InsufficientStockException(
-                                                String.format("Insufficient stock for '%s' (SKU: %s) in warehouse '%s'. "
-                                                                +
-                                                                "Available: %d, Required: %d.",
-                                                                product.getName(), product.getSku(),
-                                                                warehouse.getName(),
-                                                                inventory.getQuantity(), requested));
+                                throw new InsufficientStockException(product.getId(), warehouse.getId(),
+                                                warehouse.getName(), inventory.getQuantity(), requested);
                         }
 
                         log.debug("Stock OK — product: {}, available: {}, required: {}",
@@ -136,10 +130,8 @@ public class OrderInventoryService {
 
                         InventoryItem inventory = inventoryItemRepository
                                         .findByProductAndWarehouse(product, warehouse)
-                                        .orElseThrow(() -> new InsufficientStockException(
-                                                        String.format("Product '%s' (SKU: %s) not found in warehouse '%s' during fulfillment.",
-                                                                        product.getName(), product.getSku(),
-                                                                        warehouse.getName())));
+                                        .orElseThrow(() -> new InventoryItemNotFoundException(product.getId(),
+                                                        warehouse.getId()));
 
                         // Deduct stock (throws InsufficientStockException internally if quantity < 0)
                         inventory.removeStock(quantity);

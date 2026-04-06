@@ -1,11 +1,15 @@
 package com.moeware.ims.exception.staff.department;
 
+import org.springframework.http.HttpStatus;
+
+import com.moeware.ims.exception.BaseAppException;
+
 /**
- * Exception thrown when a department is not found
+ * Thrown when a department cannot be found by ID or department code.
  *
  * @author MoeWare Team
  */
-public class DepartmentNotFoundException extends RuntimeException {
+public class DepartmentNotFoundException extends BaseAppException {
 
     private final Long departmentId;
     private final String departmentCode;
@@ -22,10 +26,14 @@ public class DepartmentNotFoundException extends RuntimeException {
         this.departmentCode = code;
     }
 
-    public DepartmentNotFoundException(String fieldName, Object fieldValue) {
-        super(String.format("Department not found with %s: '%s'", fieldName, fieldValue));
-        this.departmentId = null;
-        this.departmentCode = null;
+    @Override
+    public HttpStatus getHttpStatus() {
+        return HttpStatus.NOT_FOUND;
+    }
+
+    @Override
+    public String getErrorTitle() {
+        return "Department Not Found";
     }
 
     public Long getDepartmentId() {

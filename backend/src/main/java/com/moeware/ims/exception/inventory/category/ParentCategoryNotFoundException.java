@@ -1,10 +1,20 @@
 package com.moeware.ims.exception.inventory.category;
 
+import org.springframework.http.HttpStatus;
+
+import com.moeware.ims.exception.BaseAppException;
+
 /**
- * Exception thrown when a parent category is not found during category creation
- * or update
+ * Thrown when a parent category referenced during category creation or update
+ * does not exist.
+ *
+ * Kept separate from {@link CategoryNotFoundException} so the handler and the
+ * API consumer can distinguish "the category you're looking for" from
+ * "the parent you tried to assign".
+ *
+ * @author MoeWare Team
  */
-public class ParentCategoryNotFoundException extends RuntimeException {
+public class ParentCategoryNotFoundException extends BaseAppException {
 
     private final Long parentCategoryId;
 
@@ -13,14 +23,19 @@ public class ParentCategoryNotFoundException extends RuntimeException {
         this.parentCategoryId = parentCategoryId;
     }
 
-    public ParentCategoryNotFoundException(String message) {
-        super(message);
-        this.parentCategoryId = null;
-    }
-
     public ParentCategoryNotFoundException(String message, Throwable cause) {
         super(message, cause);
         this.parentCategoryId = null;
+    }
+
+    @Override
+    public HttpStatus getHttpStatus() {
+        return HttpStatus.NOT_FOUND;
+    }
+
+    @Override
+    public String getErrorTitle() {
+        return "Parent Category Not Found";
     }
 
     public Long getParentCategoryId() {

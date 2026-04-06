@@ -1,19 +1,45 @@
 package com.moeware.ims.exception.staff.customer;
 
+import org.springframework.http.HttpStatus;
+
+import com.moeware.ims.exception.BaseAppException;
+
 /**
- * Exception thrown when attempting to create a customer that already exists
+ * Thrown when attempting to create or update a customer with a code or email
+ * that already belongs to another customer.
+ *
+ * @author MoeWare Team
  */
-public class CustomerAlreadyExistsException extends RuntimeException {
+public class CustomerAlreadyExistsException extends BaseAppException {
 
-    public CustomerAlreadyExistsException(String field, String value) {
-        super("Customer with " + field + " '" + value + "' already exists");
+    public enum ConflictField {
+        CODE, EMAIL
     }
 
-    public CustomerAlreadyExistsException(String message) {
-        super(message);
+    private final ConflictField conflictField;
+    private final String conflictValue;
+
+    public CustomerAlreadyExistsException(ConflictField field, String value) {
+        super(String.format("Customer with %s '%s' already exists", field.name().toLowerCase(), value));
+        this.conflictField = field;
+        this.conflictValue = value;
     }
 
-    public CustomerAlreadyExistsException(String message, Throwable cause) {
-        super(message, cause);
+    @Override
+    public HttpStatus getHttpStatus() {
+        return HttpStatus.CONFLICT;
+    }
+
+    @Override
+    public String getErrorTitle() {
+        return "Customer Already Exists";
+    }
+
+    public ConflictField getConflictField() {
+        return conflictField;
+    }
+
+    public String getConflictValue() {
+        return conflictValue;
     }
 }

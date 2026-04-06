@@ -1,17 +1,20 @@
 package com.moeware.ims.exception.transaction.shipment;
 
+import org.springframework.http.HttpStatus;
+
+import com.moeware.ims.exception.BaseAppException;
 import com.moeware.ims.enums.transaction.ShipmentStatus;
-import lombok.Getter;
 
 /**
  * Thrown when the /deliver endpoint is called on a shipment that cannot
  * transition to DELIVERED from its current status.
  *
- * Valid path to DELIVERED: PENDING → IN_TRANSIT → DELIVERED
- * Invalid: RETURNED or FAILED shipments cannot be delivered.
+ * Valid path to DELIVERED: PENDING → IN_TRANSIT → DELIVERED.
+ * RETURNED and FAILED shipments cannot be delivered.
+ *
+ * @author MoeWare Team
  */
-@Getter
-public class ShipmentNotEligibleForDeliveryException extends RuntimeException {
+public class ShipmentNotEligibleForDeliveryException extends BaseAppException {
 
     private final Long shipmentId;
     private final ShipmentStatus currentStatus;
@@ -23,5 +26,23 @@ public class ShipmentNotEligibleForDeliveryException extends RuntimeException {
                 shipmentId, currentStatus));
         this.shipmentId = shipmentId;
         this.currentStatus = currentStatus;
+    }
+
+    @Override
+    public HttpStatus getHttpStatus() {
+        return HttpStatus.CONFLICT;
+    }
+
+    @Override
+    public String getErrorTitle() {
+        return "Shipment Not Eligible For Delivery";
+    }
+
+    public Long getShipmentId() {
+        return shipmentId;
+    }
+
+    public ShipmentStatus getCurrentStatus() {
+        return currentStatus;
     }
 }

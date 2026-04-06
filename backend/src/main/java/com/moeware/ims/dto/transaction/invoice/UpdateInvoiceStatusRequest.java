@@ -5,6 +5,7 @@ import java.math.BigDecimal;
 import com.moeware.ims.enums.transaction.InvoiceStatus;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotNull;
@@ -29,4 +30,14 @@ public class UpdateInvoiceStatusRequest {
 
     @Schema(description = "Optional notes about the status change")
     private String notes;
+
+    @AssertTrue(message = "Paid amount is required when status is PAID or PARTIAL")
+    public boolean isPaidAmountValid() {
+        if (invoiceStatus == null)
+            return true;
+        if (invoiceStatus == InvoiceStatus.PAID || invoiceStatus == InvoiceStatus.PARTIAL) {
+            return paidAmount != null && paidAmount.compareTo(BigDecimal.ZERO) > 0;
+        }
+        return true;
+    }
 }

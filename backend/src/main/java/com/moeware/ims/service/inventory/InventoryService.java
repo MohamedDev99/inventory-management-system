@@ -26,8 +26,12 @@ import com.moeware.ims.entity.transaction.InventoryMovement;
 import com.moeware.ims.entity.transaction.StockAdjustment;
 import com.moeware.ims.enums.transaction.MovementType;
 import com.moeware.ims.enums.transaction.StockAdjustmentStatus;
-import com.moeware.ims.exception.ResourceNotFoundException;
+import com.moeware.ims.exception.inventory.inventoryItem.InventoryItemNotFoundException;
+import com.moeware.ims.exception.inventory.product.ProductNotFoundException;
+import com.moeware.ims.exception.staff.warehouse.WarehouseNotFoundException;
+import com.moeware.ims.exception.transaction.inventoryMovement.InvalidInventoryTransferException;
 import com.moeware.ims.exception.transaction.stockAdjustment.InsufficientStockException;
+import com.moeware.ims.exception.user.UserNotFoundException;
 import com.moeware.ims.repository.UserRepository;
 import com.moeware.ims.repository.inventory.InventoryItemRepository;
 import com.moeware.ims.repository.inventory.ProductRepository;
@@ -87,8 +91,7 @@ public class InventoryService {
         @Transactional(readOnly = true)
         public InventoryItemDTO getInventoryItemById(Long id) {
                 InventoryItem item = inventoryItemRepository.findById(id)
-                                .orElseThrow(() -> new ResourceNotFoundException(
-                                                "Inventory item not found with id: " + id));
+                                .orElseThrow(() -> new InventoryItemNotFoundException(id));
                 return mapToDTO(item);
         }
 
@@ -98,8 +101,7 @@ public class InventoryService {
         @Transactional(readOnly = true)
         public Page<InventoryItemDTO> getWarehouseInventory(Long warehouseId, Pageable pageable) {
                 Warehouse warehouse = warehouseRepository.findById(warehouseId)
-                                .orElseThrow(() -> new ResourceNotFoundException(
-                                                "Warehouse not found with id: " + warehouseId));
+                                .orElseThrow(() -> new WarehouseNotFoundException(warehouseId));
 
                 return inventoryItemRepository.findByWarehouse(warehouse, pageable)
                                 .map(this::mapToDTO);
@@ -111,8 +113,7 @@ public class InventoryService {
         @Transactional(readOnly = true)
         public List<InventoryItemDTO> getProductInventory(Long productId) {
                 Product product = productRepository.findById(productId)
-                                .orElseThrow(() -> new ResourceNotFoundException(
-                                                "Product not found with id: " + productId));
+                                .orElseThrow(() -> new ProductNotFoundException(productId));
 
                 return inventoryItemRepository.findByProduct(product).stream()
                                 .map(this::mapToDTO)
@@ -129,40 +130,35 @@ public class InventoryService {
 
                 // Validate transfer request
                 if (request.getFromWarehouseId().equals(request.getToWarehouseId())) {
-                        throw new IllegalArgumentException("Cannot transfer to the same warehouse");
+                        throw new InvalidInventoryTransferException(request.getFromWarehouseId(),
+                                        request.getToWarehouseId());
                 }
 
                 // Fetch entities
                 Product product = productRepository.findById(request.getProductId())
                                 .orElseThrow(
-                                                () -> new ResourceNotFoundException("Product not found with id: "
-                                                                + request.getProductId()));
+                                                () -> new ProductNotFoundException(request.getProductId()));
 
                 Warehouse fromWarehouse = warehouseRepository.findById(request.getFromWarehouseId())
-                                .orElseThrow(() -> new ResourceNotFoundException(
-                                                "Source warehouse not found with id: " + request.getFromWarehouseId()));
+                                .orElseThrow(() -> new WarehouseNotFoundException(request.getFromWarehouseId()));
 
                 Warehouse toWarehouse = warehouseRepository.findById(request.getToWarehouseId())
-                                .orElseThrow(() -> new ResourceNotFoundException(
-                                                "Destination warehouse not found with id: "
-                                                                + request.getToWarehouseId()));
+                                .orElseThrow(() -> new WarehouseNotFoundException(request.getFromWarehouseId()));
 
                 User performedBy = userRepository.findById(request.getPerformedBy())
                                 .orElseThrow(
-                                                () -> new ResourceNotFoundException(
-                                                                "User not found with id: " + request.getPerformedBy()));
+                                                () -> new UserNotFoundException(request.getPerformedBy()));
 
                 // Get or create inventory items
                 InventoryItem fromInventory = inventoryItemRepository.findByProductAndWarehouse(product, fromWarehouse)
-                                .orElseThrow(() -> new ResourceNotFoundException(
-                                                "Product not found in source warehouse"));
+                                .orElseThrow(() -> new InventoryItemNotFoundException(request.getProductId(),
+                                                request.getFromWarehouseId()));
 
                 // Check sufficient stock
                 if (fromInventory.getQuantity() < request.getQuantity()) {
                         throw new InsufficientStockException(
-                                        String.format("Insufficient stock in %s. Available: %d, Requested: %d",
-                                                        fromWarehouse.getName(), fromInventory.getQuantity(),
-                                                        request.getQuantity()));
+                                        request.getProductId(), request.getFromWarehouseId(),
+                                        fromWarehouse.getName(), fromInventory.getQuantity(), request.getQuantity());
                 }
 
                 // Remove stock from source
@@ -225,28 +221,27 @@ public class InventoryService {
                 // Fetch entities
                 Product product = productRepository.findById(request.getProductId())
                                 .orElseThrow(
-                                                () -> new ResourceNotFoundException("Product not found with id: "
-                                                                + request.getProductId()));
+                                                () -> new ProductNotFoundException(request.getProductId()));
 
                 Warehouse warehouse = warehouseRepository.findById(request.getWarehouseId())
-                                .orElseThrow(() -> new ResourceNotFoundException(
-                                                "Warehouse not found with id: " + request.getWarehouseId()));
+                                .orElseThrow(() -> new WarehouseNotFoundException(request.getWarehouseId()));
 
                 User performedBy = userRepository.findById(request.getPerformedBy())
                                 .orElseThrow(
-                                                () -> new ResourceNotFoundException(
-                                                                "User not found with id: " + request.getPerformedBy()));
+                                                () -> new UserNotFoundException(request.getPerformedBy()));
 
                 // Get current inventory
                 InventoryItem inventory = inventoryItemRepository.findByProductAndWarehouse(product, warehouse)
-                                .orElseThrow(() -> new ResourceNotFoundException("Product not found in warehouse"));
+                                .orElseThrow(() -> new ProductNotFoundException(request.getProductId()));
 
                 Integer quantityBefore = inventory.getQuantity();
                 Integer quantityAfter = quantityBefore + request.getQuantityChange();
 
                 // Validate adjustment
                 if (quantityAfter < 0) {
-                        throw new IllegalArgumentException("Adjustment would result in negative stock");
+                        throw new InsufficientStockException(
+                                        request.getProductId(), request.getWarehouseId(),
+                                        quantityBefore, quantityAfter); // quantityAfter is already negative here
                 }
 
                 // Create adjustment record
@@ -281,12 +276,10 @@ public class InventoryService {
 
                 // Fetch warehouse and user
                 Warehouse warehouse = warehouseRepository.findById(request.getWarehouseId())
-                                .orElseThrow(() -> new ResourceNotFoundException(
-                                                "Warehouse not found with id: " + request.getWarehouseId()));
+                                .orElseThrow(() -> new WarehouseNotFoundException(request.getWarehouseId()));
 
                 User receivedBy = userRepository.findById(request.getReceivedBy())
-                                .orElseThrow(() -> new ResourceNotFoundException(
-                                                "User not found with id: " + request.getReceivedBy()));
+                                .orElseThrow(() -> new UserNotFoundException(request.getReceivedBy()));
 
                 LocalDateTime receivedDate = request.getReceivedDate() != null ? request.getReceivedDate()
                                 : LocalDateTime.now();
@@ -295,9 +288,7 @@ public class InventoryService {
                 for (ReceiveShipmentRequest.ReceiveShipmentItem item : request.getItems()) {
                         Product product = productRepository.findById(item.getProductId())
                                         .orElseThrow(
-                                                        () -> new ResourceNotFoundException(
-                                                                        "Product not found with id: "
-                                                                                        + item.getProductId()));
+                                                        () -> new ProductNotFoundException(item.getProductId()));
 
                         // Update inventory
                         InventoryItem inventory = inventoryItemRepository.findByProductAndWarehouse(product, warehouse)
@@ -349,7 +340,7 @@ public class InventoryService {
                 List<InventoryItem> items;
                 if (warehouseId != null) {
                         Warehouse warehouse = warehouseRepository.findById(warehouseId)
-                                        .orElseThrow(() -> new ResourceNotFoundException("Warehouse not found"));
+                                        .orElseThrow(() -> new WarehouseNotFoundException(warehouseId));
                         items = inventoryItemRepository.findByWarehouse(warehouse, Pageable.unpaged()).getContent();
                 } else {
                         items = inventoryItemRepository.findAll();

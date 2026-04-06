@@ -23,6 +23,7 @@ import com.moeware.ims.exception.inventory.category.CategoryHasProductsException
 import com.moeware.ims.exception.inventory.category.CategoryNotFoundException;
 import com.moeware.ims.exception.inventory.category.CircularCategoryReferenceException;
 import com.moeware.ims.exception.inventory.category.ParentCategoryNotFoundException;
+import com.moeware.ims.exception.inventory.category.CategoryAlreadyExistsException.ConflictField;
 import com.moeware.ims.repository.inventory.CategoryRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -53,11 +54,11 @@ public class CategoryService {
 
         // Validate unique constraints
         if (categoryRepository.existsByCode(request.getCode())) {
-            throw new CategoryAlreadyExistsException("code", request.getCode());
+            throw new CategoryAlreadyExistsException(ConflictField.CODE, request.getCode());
         }
 
         if (categoryRepository.existsByName(request.getName())) {
-            throw new CategoryAlreadyExistsException("name", request.getName());
+            throw new CategoryAlreadyExistsException(ConflictField.NAME, request.getName());
         }
 
         // Validate and set parent category if provided
@@ -178,7 +179,7 @@ public class CategoryService {
 
         // Validate parent exists
         if (!categoryRepository.existsById(parentId)) {
-            throw new CategoryAlreadyExistsException(parentId);
+            throw new CategoryNotFoundException(parentId);
         }
 
         Page<Category> categories = categoryRepository.findByParentCategoryId(parentId, pageable);
@@ -223,7 +224,7 @@ public class CategoryService {
         log.debug("Counting products in category tree for ID: {}", categoryId);
 
         if (!categoryRepository.existsById(categoryId)) {
-            throw new CategoryAlreadyExistsException(categoryId);
+            throw new CategoryNotFoundException(categoryId);
         }
 
         return categoryRepository.countProductsInCategoryTree(categoryId);
@@ -247,7 +248,7 @@ public class CategoryService {
             // Check if name is being changed and if new name already exists
             if (!request.getName().equals(category.getName()) &&
                     categoryRepository.existsByName(request.getName())) {
-                throw new CategoryAlreadyExistsException("name", request.getName());
+                throw new CategoryAlreadyExistsException(ConflictField.NAME, request.getName());
             }
             category.setName(request.getName());
         }

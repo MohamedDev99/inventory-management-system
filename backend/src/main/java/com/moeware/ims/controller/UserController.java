@@ -24,8 +24,8 @@ import com.moeware.ims.dto.auth.ChangePasswordDto;
 import com.moeware.ims.dto.user.UserRegistrationDto;
 import com.moeware.ims.dto.user.UserResponseDto;
 import com.moeware.ims.dto.user.UserUpdateDto;
-import com.moeware.ims.exception.GlobalExceptionHandler;
 import com.moeware.ims.exception.auth.InvalidCredentialsException;
+import com.moeware.ims.exception.handler.GlobalExceptionHandler;
 import com.moeware.ims.service.UserService;
 
 import io.swagger.v3.oas.annotations.Operation;

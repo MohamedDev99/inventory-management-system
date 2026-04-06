@@ -19,11 +19,11 @@ import com.moeware.ims.dto.auth.TokenPair;
 import com.moeware.ims.dto.user.UserRegistrationDto;
 import com.moeware.ims.dto.user.UserResponseDto;
 import com.moeware.ims.entity.User;
-import com.moeware.ims.exception.ResourceNotFoundException;
 import com.moeware.ims.exception.auth.AccountDisabledException;
 import com.moeware.ims.exception.auth.AccountLockedException;
 import com.moeware.ims.exception.auth.InvalidCredentialsException;
 import com.moeware.ims.exception.auth.InvalidTokenException;
+import com.moeware.ims.exception.user.UserNotFoundException;
 import com.moeware.ims.repository.UserRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -274,7 +274,7 @@ public class AuthenticationService {
      *
      * @param userId      the ID of the target user
      * @param newPassword plain-text password (BCrypt-encoded inside UserService)
-     * @throws ResourceNotFoundException if the user does not exist
+     * @throws UserNotFoundException if the user does not exist
      */
     @Transactional
     public void adminResetPassword(Long userId, String newPassword) {

@@ -1,6 +1,8 @@
 package com.moeware.ims.dto.inventory.category;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.AssertTrue;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -19,6 +21,7 @@ public class CategoryUpdateRequest {
 
     @Schema(description = "Category name", example = "Electronics")
     @Size(max = 100, message = "Category name must not exceed 100 characters")
+    @Pattern(regexp = "^(?!\\s*$).+", message = "Category name must not be blank if provided")
     private String name;
 
     @Schema(description = "Detailed description of the category")
@@ -26,4 +29,9 @@ public class CategoryUpdateRequest {
 
     @Schema(description = "Parent category ID (null for root category)", example = "1")
     private Long parentCategoryId;
+
+    @AssertTrue(message = "At least one field must be provided for update")
+    public boolean isAtLeastOneFieldPresent() {
+        return (name != null && !name.isBlank()) || description != null || parentCategoryId != null;
+    }
 }

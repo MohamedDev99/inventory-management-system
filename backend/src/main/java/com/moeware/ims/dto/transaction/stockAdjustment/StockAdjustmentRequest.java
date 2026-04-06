@@ -4,6 +4,7 @@ import com.moeware.ims.enums.transaction.AdjustmentReason;
 import com.moeware.ims.enums.transaction.AdjustmentType;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
@@ -49,4 +50,20 @@ public class StockAdjustmentRequest {
         @Schema(description = "User ID performing the adjustment", example = "5", requiredMode = Schema.RequiredMode.REQUIRED)
         @NotNull(message = "Performed by user ID is required")
         private Long performedBy;
+
+        @AssertTrue(message = "Quantity change must not be zero")
+        public boolean isQuantityChangeNonZero() {
+                return quantityChange != null && quantityChange != 0;
+        }
+
+        @AssertTrue(message = "Quantity change sign must match adjustment type: ADD expects positive, REMOVE expects negative")
+        public boolean isQuantitySignConsistent() {
+                if (adjustmentType == null || quantityChange == null)
+                        return true;
+                return switch (adjustmentType) {
+                        case ADD -> quantityChange > 0;
+                        case REMOVE -> quantityChange < 0;
+                        case CORRECTION -> true; // correction can be either sign
+                };
+        }
 }

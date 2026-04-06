@@ -1,18 +1,16 @@
 package com.moeware.ims.exception.transaction.invoice;
 
-import lombok.Getter;
+import org.springframework.http.HttpStatus;
+
+import com.moeware.ims.exception.BaseAppException;
 
 /**
- * Thrown when any operation (send, status update, payment recording) is
- * attempted
- * on an invoice that has already been cancelled.
+ * Thrown when any operation is attempted on an invoice that has already been
+ * cancelled. CANCELLED is a terminal state — no further actions are permitted.
  *
- * A CANCELLED invoice is a terminal state — no further actions are permitted on
- * it.
- * A new invoice must be generated if billing needs to continue.
+ * @author MoeWare Team
  */
-@Getter
-public class InvoiceAlreadyCancelledException extends RuntimeException {
+public class InvoiceAlreadyCancelledException extends BaseAppException {
 
     private final Long invoiceId;
     private final String invoiceNumber;
@@ -24,5 +22,23 @@ public class InvoiceAlreadyCancelledException extends RuntimeException {
                 invoiceId, invoiceNumber));
         this.invoiceId = invoiceId;
         this.invoiceNumber = invoiceNumber;
+    }
+
+    @Override
+    public HttpStatus getHttpStatus() {
+        return HttpStatus.CONFLICT;
+    }
+
+    @Override
+    public String getErrorTitle() {
+        return "Invoice Already Cancelled";
+    }
+
+    public Long getInvoiceId() {
+        return invoiceId;
+    }
+
+    public String getInvoiceNumber() {
+        return invoiceNumber;
     }
 }

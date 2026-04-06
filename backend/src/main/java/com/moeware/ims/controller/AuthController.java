@@ -17,8 +17,9 @@ import com.moeware.ims.dto.auth.AuthenticationRequest;
 import com.moeware.ims.dto.auth.AuthenticationResponse;
 import com.moeware.ims.dto.user.UserRegistrationDto;
 import com.moeware.ims.dto.user.UserResponseDto;
-import com.moeware.ims.exception.GlobalExceptionHandler;
 import com.moeware.ims.exception.auth.InvalidTokenException;
+import com.moeware.ims.exception.handler.AuthExceptionHandler;
+import com.moeware.ims.exception.handler.GlobalExceptionHandler;
 import com.moeware.ims.service.AuthenticationService;
 import com.moeware.ims.service.AuthenticationService.AuthResult;
 import com.moeware.ims.service.CookieService;
@@ -110,7 +111,7 @@ public class AuthController {
         @ApiResponses({
                         @ApiResponse(responseCode = "200", description = "Login successful — tokens set in cookies", content = @Content(mediaType = "application/json", schema = @Schema(implementation = AuthenticationResponse.class))),
                         @ApiResponse(responseCode = "401", description = "Invalid credentials", content = @Content(mediaType = "application/json", schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class))),
-                        @ApiResponse(responseCode = "423", description = "Account locked due to too many failed attempts", content = @Content(mediaType = "application/json", schema = @Schema(implementation = GlobalExceptionHandler.AccountLockedErrorResponse.class))) })
+                        @ApiResponse(responseCode = "423", description = "Account locked due to too many failed attempts", content = @Content(mediaType = "application/json", schema = @Schema(implementation = AuthExceptionHandler.AccountLockedErrorResponse.class))) })
 
         @PostMapping("/login")
         public ResponseEntity<ApiResponseWpp<AuthenticationResponse>> login(

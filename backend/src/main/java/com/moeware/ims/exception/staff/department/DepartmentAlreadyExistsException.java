@@ -1,17 +1,44 @@
 package com.moeware.ims.exception.staff.department;
 
+import org.springframework.http.HttpStatus;
+
+import com.moeware.ims.exception.BaseAppException;
+
 /**
- * Exception thrown when a department with the same code or name already exists
+ * Thrown when a department uniqueness constraint is violated.
  *
  * @author MoeWare Team
  */
-public class DepartmentAlreadyExistsException extends RuntimeException {
+public class DepartmentAlreadyExistsException extends BaseAppException {
 
-    public DepartmentAlreadyExistsException(String message) {
-        super(message);
+    public enum ConflictField {
+        DEPARTMENT_CODE, NAME
     }
 
-    public DepartmentAlreadyExistsException(String fieldName, String fieldValue) {
-        super(String.format("Department already exists with %s: '%s'", fieldName, fieldValue));
+    private final ConflictField conflictField;
+    private final String conflictValue;
+
+    public DepartmentAlreadyExistsException(ConflictField field, String value) {
+        super(String.format("Department already exists with %s: '%s'", field.name().toLowerCase(), value));
+        this.conflictField = field;
+        this.conflictValue = value;
+    }
+
+    @Override
+    public HttpStatus getHttpStatus() {
+        return HttpStatus.CONFLICT;
+    }
+
+    @Override
+    public String getErrorTitle() {
+        return "Department Already Exists";
+    }
+
+    public ConflictField getConflictField() {
+        return conflictField;
+    }
+
+    public String getConflictValue() {
+        return conflictValue;
     }
 }

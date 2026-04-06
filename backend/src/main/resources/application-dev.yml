@@ -22,11 +22,11 @@ server:
 
 app:
   cors:
-    allowed-origins: "http://localhost:5173" # Vite dev server; change to production URL when deploying
+    allowed-origins: "https://5173-firebase-moeware-1771436889408.cluster-ikslh4rdsnbqsvu5nw3v4dqjj2.cloudworkstations.dev" # Vite dev server; change to production URL when deploying
 
   cookie:
     # Set to true in production (requires HTTPS). Keep false for local HTTP dev.
-    secure: false
+    secure: true
     # Leave empty for same-domain. Set to ".moeware.com" to share across subdomains.
     domain:
     # Access token cookie TTL in seconds (must match jwt.expiration / 1000)

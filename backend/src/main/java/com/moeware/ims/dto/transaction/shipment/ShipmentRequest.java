@@ -8,8 +8,10 @@ import com.moeware.ims.enums.transaction.ShippingMethod;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.FutureOrPresent;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -45,10 +47,11 @@ public class ShipmentRequest {
     private ShippingMethod shippingMethod;
 
     @Schema(description = "Estimated delivery date", example = "2026-02-05")
+    @FutureOrPresent(message = "Estimated delivery date must be today or in the future")
     private LocalDate estimatedDeliveryDate;
 
-    @DecimalMin(value = "0.0", inclusive = true)
     @Digits(integer = 10, fraction = 2)
+    @DecimalMin(value = "0.0", inclusive = true, message = "Shipping cost must be non-negative")
     @Builder.Default
     @Schema(description = "Shipping cost", example = "15.99", defaultValue = "0.00")
     private BigDecimal shippingCost = BigDecimal.ZERO;
@@ -59,6 +62,7 @@ public class ShipmentRequest {
     private BigDecimal weight;
 
     @Size(max = 50)
+    @Pattern(regexp = "^\\d+(\\.\\d+)?x\\d+(\\.\\d+)?x\\d+(\\.\\d+)?$", message = "Dimensions must follow format LxWxH (e.g. 30x20x15)")
     @Schema(description = "Package dimensions (LxWxH cm)", example = "30x20x15")
     private String dimensions;
 

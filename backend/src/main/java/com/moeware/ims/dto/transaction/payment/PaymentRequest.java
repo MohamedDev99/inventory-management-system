@@ -8,7 +8,10 @@ import com.moeware.ims.enums.transaction.PaymentMethod;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PastOrPresent;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -30,6 +33,7 @@ public class PaymentRequest {
     private Long customerId;
 
     @NotNull(message = "Payment date is required")
+    @PastOrPresent(message = "Payment date cannot be in the future")
     @Schema(description = "Date when the payment was received/processed", example = "2026-01-31", requiredMode = Schema.RequiredMode.REQUIRED)
     private LocalDate paymentDate;
 
@@ -43,7 +47,9 @@ public class PaymentRequest {
     @Schema(description = "Payment amount", example = "1418.99", minimum = "0.01", requiredMode = Schema.RequiredMode.REQUIRED)
     private BigDecimal amount;
 
-    @Size(min = 3, max = 3)
+    @NotBlank(message = "Currency is required")
+    @Size(min = 3, max = 3, message = "Currency must be a 3-letter ISO 4217 code")
+    @Pattern(regexp = "^[A-Z]{3}$", message = "Currency must be uppercase ISO 4217 code (e.g. USD, EUR)")
     @Builder.Default
     @Schema(description = "Currency code (ISO 4217)", example = "USD", defaultValue = "USD")
     private String currency = "USD";

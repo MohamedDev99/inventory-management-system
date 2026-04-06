@@ -12,7 +12,9 @@ import com.moeware.ims.dto.staff.employee.EmployeeResponseDTO;
 import com.moeware.ims.entity.staff.Department;
 import com.moeware.ims.entity.staff.Employee;
 import com.moeware.ims.exception.staff.department.DepartmentAlreadyExistsException;
+import com.moeware.ims.exception.staff.department.DepartmentAlreadyExistsException.ConflictField;
 import com.moeware.ims.exception.staff.department.DepartmentNotFoundException;
+import com.moeware.ims.exception.staff.department.InvalidDepartmentOperationException;
 import com.moeware.ims.exception.staff.employee.EmployeeNotFoundException;
 import com.moeware.ims.mapper.staff.department.DepartmentMapper;
 import com.moeware.ims.mapper.staff.employee.EmployeeMapper;
@@ -147,7 +149,7 @@ public class DepartmentService {
         if (request.getParentDepartmentId() != null) {
             // Prevent circular hierarchy
             if (request.getParentDepartmentId().equals(id)) {
-                throw new IllegalArgumentException("A department cannot be its own parent");
+                throw new InvalidDepartmentOperationException("A department cannot be its own parent");
             }
             Department parent = departmentRepository.findById(request.getParentDepartmentId())
                     .orElseThrow(() -> new DepartmentNotFoundException(request.getParentDepartmentId()));
@@ -182,17 +184,17 @@ public class DepartmentService {
     private void validateUniqueness(String code, String name, Long excludeId) {
         if (excludeId == null) {
             if (departmentRepository.existsByDepartmentCode(code)) {
-                throw new DepartmentAlreadyExistsException("department_code", code);
+                throw new DepartmentAlreadyExistsException(ConflictField.DEPARTMENT_CODE, code);
             }
             if (departmentRepository.existsByName(name)) {
-                throw new DepartmentAlreadyExistsException("name", name);
+                throw new DepartmentAlreadyExistsException(ConflictField.NAME, name);
             }
         } else {
             if (departmentRepository.existsByDepartmentCodeAndIdNot(code, excludeId)) {
-                throw new DepartmentAlreadyExistsException("department_code", code);
+                throw new DepartmentAlreadyExistsException(ConflictField.DEPARTMENT_CODE, code);
             }
             if (departmentRepository.existsByNameAndIdNot(name, excludeId)) {
-                throw new DepartmentAlreadyExistsException("name", name);
+                throw new DepartmentAlreadyExistsException(ConflictField.NAME, name);
             }
         }
     }

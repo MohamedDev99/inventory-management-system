@@ -1,10 +1,16 @@
 package com.moeware.ims.exception.staff.customer;
 
+import org.springframework.http.HttpStatus;
+
+import com.moeware.ims.exception.BaseAppException;
+
 /**
- * Exception thrown when attempting to perform operations on an inactive
- * customer
+ * Thrown when attempting to perform an operation on a customer that is
+ * inactive.
+ *
+ * @author MoeWare Team
  */
-public class InactiveCustomerException extends RuntimeException {
+public class InactiveCustomerException extends BaseAppException {
 
     private final Long customerId;
     private final String customerCode;
@@ -25,6 +31,16 @@ public class InactiveCustomerException extends RuntimeException {
         super(message, cause);
         this.customerId = null;
         this.customerCode = null;
+    }
+
+    @Override
+    public HttpStatus getHttpStatus() {
+        return HttpStatus.CONFLICT;
+    }
+
+    @Override
+    public String getErrorTitle() {
+        return "Customer Inactive";
     }
 
     public Long getCustomerId() {

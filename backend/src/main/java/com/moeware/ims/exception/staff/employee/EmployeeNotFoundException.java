@@ -1,11 +1,15 @@
 package com.moeware.ims.exception.staff.employee;
 
+import org.springframework.http.HttpStatus;
+
+import com.moeware.ims.exception.BaseAppException;
+
 /**
- * Exception thrown when an employee is not found
+ * Thrown when an employee cannot be found by ID or employee code.
  *
  * @author MoeWare Team
  */
-public class EmployeeNotFoundException extends RuntimeException {
+public class EmployeeNotFoundException extends BaseAppException {
 
     private final Long employeeId;
     private final String employeeCode;
@@ -22,10 +26,14 @@ public class EmployeeNotFoundException extends RuntimeException {
         this.employeeCode = code;
     }
 
-    public EmployeeNotFoundException(String fieldName, Object fieldValue) {
-        super(String.format("Employee not found with %s: '%s'", fieldName, fieldValue));
-        this.employeeId = null;
-        this.employeeCode = null;
+    @Override
+    public HttpStatus getHttpStatus() {
+        return HttpStatus.NOT_FOUND;
+    }
+
+    @Override
+    public String getErrorTitle() {
+        return "Employee Not Found";
     }
 
     public Long getEmployeeId() {

@@ -1,10 +1,16 @@
 package com.moeware.ims.exception.transaction;
 
+import org.springframework.http.HttpStatus;
+
+import com.moeware.ims.exception.BaseAppException;
+
 /**
- * Exception thrown when an attempt is made to edit an order that is not in an
- * editable state
+ * Thrown when an attempt is made to edit or cancel an order that is in a
+ * non-editable status (e.g. already SHIPPED, DELIVERED, or RECEIVED).
+ *
+ * @author MoeWare Team
  */
-public class OrderNotEditableException extends RuntimeException {
+public class OrderNotEditableException extends BaseAppException {
 
     private final String orderType;
     private final Long orderId;
@@ -15,6 +21,16 @@ public class OrderNotEditableException extends RuntimeException {
         this.orderType = orderType;
         this.orderId = orderId;
         this.currentStatus = currentStatus;
+    }
+
+    @Override
+    public HttpStatus getHttpStatus() {
+        return HttpStatus.CONFLICT;
+    }
+
+    @Override
+    public String getErrorTitle() {
+        return "Order Not Editable";
     }
 
     public String getOrderType() {

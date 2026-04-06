@@ -1,25 +1,37 @@
 package com.moeware.ims.exception.staff.warehouse;
 
+import org.springframework.http.HttpStatus;
+
+import com.moeware.ims.exception.BaseAppException;
+
 /**
- * Exception thrown when attempting to delete a warehouse that has inventory
- * items
+ * Thrown when attempting to hard-delete a warehouse that still has inventory
+ * items.
+ *
+ * @author MoeWare Team
  */
-public class WarehouseHasInventoryException extends RuntimeException {
+public class WarehouseHasInventoryException extends BaseAppException {
 
     private final Long warehouseId;
     private final int inventoryItemCount;
 
     public WarehouseHasInventoryException(Long warehouseId, int inventoryItemCount) {
-        super(String.format("Cannot delete warehouse with id: %d. It has %d inventory items. " +
-                "Please transfer or remove all inventory first.", warehouseId, inventoryItemCount));
+        super(String.format(
+                "Cannot delete warehouse with id: %d. It has %d inventory item(s). " +
+                        "Please transfer or remove all inventory first.",
+                warehouseId, inventoryItemCount));
         this.warehouseId = warehouseId;
         this.inventoryItemCount = inventoryItemCount;
     }
 
-    public WarehouseHasInventoryException(String message) {
-        super(message);
-        this.warehouseId = null;
-        this.inventoryItemCount = 0;
+    @Override
+    public HttpStatus getHttpStatus() {
+        return HttpStatus.CONFLICT;
+    }
+
+    @Override
+    public String getErrorTitle() {
+        return "Warehouse Has Inventory";
     }
 
     public Long getWarehouseId() {

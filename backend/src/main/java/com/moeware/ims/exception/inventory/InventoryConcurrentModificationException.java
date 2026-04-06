@@ -1,10 +1,17 @@
 package com.moeware.ims.exception.inventory;
 
+import org.springframework.http.HttpStatus;
+
+import com.moeware.ims.exception.BaseAppException;
+
 /**
- * Exception thrown when optimistic locking detects a concurrent modification
- * Occurs when the entity version has changed between read and write operations
+ * Thrown when optimistic locking detects a concurrent modification — the entity
+ * version changed between the read and write operations, meaning another
+ * transaction already committed a change to the same record.
+ *
+ * @author MoeWare Team
  */
-public class InventoryConcurrentModificationException extends RuntimeException {
+public class InventoryConcurrentModificationException extends BaseAppException {
 
     private final String entityType;
     private final Long entityId;
@@ -17,8 +24,9 @@ public class InventoryConcurrentModificationException extends RuntimeException {
             Integer expectedVersion,
             Integer actualVersion) {
         super(String.format(
-                "Concurrent modification detected for %s with id %d. " +
-                        "Expected version %d but found %d. Another user may have modified this record.",
+                "Concurrent modification detected for %s with id %d. "
+                        + "Expected version %d but found %d. "
+                        + "Another user may have modified this record.",
                 entityType, entityId, expectedVersion, actualVersion));
         this.entityType = entityType;
         this.entityId = entityId;
@@ -26,6 +34,9 @@ public class InventoryConcurrentModificationException extends RuntimeException {
         this.actualVersion = actualVersion;
     }
 
+    /**
+     * Use when version details are unavailable (e.g., caught from JPA internals).
+     */
     public InventoryConcurrentModificationException(String message) {
         super(message);
         this.entityType = null;
@@ -40,6 +51,16 @@ public class InventoryConcurrentModificationException extends RuntimeException {
         this.entityId = null;
         this.expectedVersion = null;
         this.actualVersion = null;
+    }
+
+    @Override
+    public HttpStatus getHttpStatus() {
+        return HttpStatus.CONFLICT;
+    }
+
+    @Override
+    public String getErrorTitle() {
+        return "Concurrent Modification";
     }
 
     public String getEntityType() {

@@ -1,6 +1,7 @@
 package com.moeware.ims.dto.transaction.inventoryMovement;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -40,4 +41,11 @@ public class TransferInventoryRequest {
     @Schema(description = "User ID performing the transfer", example = "5", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotNull(message = "Performed by user ID is required")
     private Long performedBy;
+
+    @AssertTrue(message = "Source and destination warehouses must be different")
+    public boolean isWarehouseDifferent() {
+        if (fromWarehouseId == null || toWarehouseId == null)
+            return true;
+        return !fromWarehouseId.equals(toWarehouseId);
+    }
 }

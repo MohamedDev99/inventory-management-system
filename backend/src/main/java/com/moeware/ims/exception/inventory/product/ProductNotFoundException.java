@@ -1,14 +1,28 @@
 package com.moeware.ims.exception.inventory.product;
 
+import org.springframework.http.HttpStatus;
+
+import com.moeware.ims.exception.BaseAppException;
+
 /**
- * Exception thrown when a requested product is not found
- * More specific than generic ResourceNotFoundException for product operations
+ * Thrown when a product cannot be found by ID, SKU, or barcode.
+ *
+ * Uses a {@link LookupField} enum instead of a raw string field name
+ * to eliminate typo risk and make call sites self-documenting.
+ *
+ * @author MoeWare Team
  */
-public class ProductNotFoundException extends RuntimeException {
+public class ProductNotFoundException extends BaseAppException {
+
+    public enum LookupField {
+        SKU, BARCODE
+    }
 
     private final Long productId;
     private final String sku;
     private final String barcode;
+
+    // ── Lookup by ID ──────────────────────────────────────────────────────────
 
     public ProductNotFoundException(Long productId) {
         super("Product not found with id: " + productId);
@@ -17,21 +31,16 @@ public class ProductNotFoundException extends RuntimeException {
         this.barcode = null;
     }
 
-    public ProductNotFoundException(String fieldName, String fieldValue) {
-        super(String.format("Product not found with %s: '%s'", fieldName, fieldValue));
-        if ("sku".equalsIgnoreCase(fieldName)) {
-            this.sku = fieldValue;
-            this.barcode = null;
+    // ── Lookup by SKU or barcode ──────────────────────────────────────────────
 
-        } else if ("barcode".equalsIgnoreCase(fieldName)) {
-            this.barcode = fieldValue;
-            this.sku = null;
-        } else {
-            this.sku = null;
-            this.barcode = null;
-        }
+    public ProductNotFoundException(LookupField field, String value) {
+        super(String.format("Product not found with %s: '%s'", field.name().toLowerCase(), value));
         this.productId = null;
+        this.sku = field == LookupField.SKU ? value : null;
+        this.barcode = field == LookupField.BARCODE ? value : null;
     }
+
+    // ── Cause-wrapping constructor ────────────────────────────────────────────
 
     public ProductNotFoundException(String message, Throwable cause) {
         super(message, cause);
@@ -39,6 +48,20 @@ public class ProductNotFoundException extends RuntimeException {
         this.sku = null;
         this.barcode = null;
     }
+
+    // ── BaseAppException contract ─────────────────────────────────────────────
+
+    @Override
+    public HttpStatus getHttpStatus() {
+        return HttpStatus.NOT_FOUND;
+    }
+
+    @Override
+    public String getErrorTitle() {
+        return "Product Not Found";
+    }
+
+    // ── Accessors ─────────────────────────────────────────────────────────────
 
     public Long getProductId() {
         return productId;
