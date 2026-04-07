@@ -3,7 +3,6 @@ package com.moeware.ims.controller;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -68,7 +67,6 @@ import lombok.extern.slf4j.Slf4j;
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
 @Slf4j
-@CrossOrigin(origins = "${app.cors.allowed-origins}", allowCredentials = "true")
 @Tag(name = "Authentication", description = "Authentication APIs — registration, login, token refresh, logout, and admin password reset. "
                 + "JWT tokens are set as HttpOnly cookies on the response.")
 public class AuthController {
