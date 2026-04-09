@@ -34,7 +34,7 @@ import lombok.RequiredArgsConstructor;
 
 /**
  * REST controller for managing shipments.
- * Base path: /api/v1/shipments
+ * Base path: /api/shipments
  */
 @RestController
 @RequestMapping("/api/shipments")

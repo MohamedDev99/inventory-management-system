@@ -22,8 +22,16 @@ import com.moeware.ims.dto.dashboard.DashboardSalesAnalyticsResponse;
 import com.moeware.ims.dto.dashboard.DashboardSalesTrendResponse;
 import com.moeware.ims.dto.dashboard.DashboardTopSellingProductsResponse;
 import com.moeware.ims.enums.DashboardPeriod;
+import com.moeware.ims.exception.handler.GlobalExceptionHandler;
 import com.moeware.ims.service.DashboardService;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -32,222 +40,214 @@ import lombok.extern.slf4j.Slf4j;
  * <p>
  * Base path: {@code /api/dashboard}
  * <p>
- * All endpoints require authentication. Role filtering is applied at the
- * service
- * layer where needed (e.g. a VIEWER only sees their warehouse data).
+ * All endpoints are read-only. Role restrictions are applied per endpoint:
+ * financial data (analytics, pending actions) requires ADMIN or MANAGER;
+ * operational views (overview, alerts, activity feed) are open to all
+ * authenticated roles.
  */
 @RestController
 @RequestMapping("/api/dashboard")
 @RequiredArgsConstructor
 @Slf4j
+@Tag(name = "Dashboard", description = "Aggregated KPIs, analytics, alerts, and chart data for the MoeWare dashboard")
+@SecurityRequirement(name = "bearerAuth")
 public class DashboardController {
 
     private final DashboardService dashboardService;
 
     // ─── 1. Overview ─────────────────────────────────────────────────────────
 
-    /**
-     * GET /api/dashboard/overview
-     * <p>
-     * Returns system-wide KPIs: product counts, inventory value, order counts,
-     * today's activity, alert summary, and revenue figures.
-     * Accessible by all authenticated roles; content is role-filtered in the
-     * service.
-     */
+    @Operation(summary = "Get dashboard overview", description = "Returns system-wide KPIs: total products, inventory value, order queue sizes, "
+            +
+            "today's activity counts, alert totals, and revenue figures for today / week / month.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Overview data returned successfully"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthenticated request", content = @Content(schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class)))
+    })
     @GetMapping("/overview")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponseWpp<DashboardOverviewResponse>> getOverview() {
         log.debug("GET /dashboard/overview");
-        DashboardOverviewResponse data = dashboardService.getOverview();
-        return ResponseEntity.ok(ApiResponseWpp.success(data));
+        return ResponseEntity.ok(ApiResponseWpp.success(dashboardService.getOverview()));
     }
 
     // ─── 2. Inventory Summary ─────────────────────────────────────────────────
 
-    /**
-     * GET /api/dashboard/inventory-summary
-     * <p>
-     * Returns inventory totals (cost/retail value, profit), stock-status
-     * distribution,
-     * and per-warehouse / per-category breakdowns.
-     *
-     * @param warehouseId optional warehouse filter
-     * @param categoryId  optional category filter
-     */
+    @Operation(summary = "Get inventory summary", description = "Returns inventory cost/retail value, potential profit, stock-status distribution "
+            +
+            "(in-stock / low-stock / out-of-stock), and breakdowns by category and warehouse. " +
+            "Optionally scoped to a single warehouse or category.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Inventory summary returned successfully"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthenticated request", content = @Content(schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class)))
+    })
     @GetMapping("/inventory-summary")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponseWpp<DashboardInventorySummaryResponse>> getInventorySummary(
-            @RequestParam(required = false) Long warehouseId,
-            @RequestParam(required = false) Long categoryId) {
+            @Parameter(description = "Scope results to a single warehouse ID") @RequestParam(required = false) Long warehouseId,
+            @Parameter(description = "Scope results to a single category ID") @RequestParam(required = false) Long categoryId) {
+
         log.debug("GET /dashboard/inventory-summary warehouseId={} categoryId={}", warehouseId, categoryId);
-        DashboardInventorySummaryResponse data = dashboardService.getInventorySummary(warehouseId, categoryId);
-        return ResponseEntity.ok(ApiResponseWpp.success(data));
+        return ResponseEntity.ok(ApiResponseWpp.success(
+                dashboardService.getInventorySummary(warehouseId, categoryId)));
     }
 
     // ─── 3. Sales Analytics ───────────────────────────────────────────────────
 
-    /**
-     * GET /api/dashboard/sales-analytics
-     * <p>
-     * Returns sales performance for the given period or custom date range.
-     * Includes order totals, status distribution, top products/customers, daily
-     * trend,
-     * and period-over-period growth metrics.
-     *
-     * @param period    predefined time window (TODAY | WEEK | MONTH | QUARTER |
-     *                  YEAR)
-     * @param startDate custom range start (overrides period when both start + end
-     *                  supplied)
-     * @param endDate   custom range end
-     */
+    @Operation(summary = "Get sales analytics", description = "Returns sales performance for the requested period: order totals, revenue, "
+            +
+            "status distribution, top products and customers, daily trend data, and " +
+            "period-over-period growth metrics. " +
+            "When both startDate and endDate are provided they override the period parameter.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Sales analytics returned successfully"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Access denied — ADMIN or MANAGER role required", content = @Content(schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class)))
+    })
     @GetMapping("/sales-analytics")
     @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     public ResponseEntity<ApiResponseWpp<DashboardSalesAnalyticsResponse>> getSalesAnalytics(
-            @RequestParam(required = false, defaultValue = "MONTH") DashboardPeriod period,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+            @Parameter(description = "Predefined time window. Ignored when startDate + endDate are both supplied.", schema = @Schema(implementation = DashboardPeriod.class, defaultValue = "MONTH")) @RequestParam(required = false, defaultValue = "MONTH") DashboardPeriod period,
+            @Parameter(description = "Custom range start date (yyyy-MM-dd). Must be paired with endDate.") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @Parameter(description = "Custom range end date (yyyy-MM-dd). Must be paired with startDate.") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+
         log.debug("GET /dashboard/sales-analytics period={} start={} end={}", period, startDate, endDate);
-        DashboardSalesAnalyticsResponse data = dashboardService.getSalesAnalytics(period, startDate, endDate);
-        return ResponseEntity.ok(ApiResponseWpp.success(data));
+        return ResponseEntity.ok(ApiResponseWpp.success(
+                dashboardService.getSalesAnalytics(period, startDate, endDate)));
     }
 
     // ─── 4. Purchase Analytics ────────────────────────────────────────────────
 
-    /**
-     * GET /api/dashboard/purchase-analytics
-     * <p>
-     * Returns purchase-order performance for the given period.
-     * Includes PO totals, status distribution, top suppliers, category spend, and
-     * monthly trend.
-     *
-     * @param period    predefined time window
-     * @param startDate custom range start
-     * @param endDate   custom range end
-     */
+    @Operation(summary = "Get purchase analytics", description = "Returns purchase-order performance for the requested period: PO totals, spend, "
+            +
+            "status distribution, top suppliers ranked by spend, category spending breakdown, " +
+            "and a monthly trend. When both startDate and endDate are provided they override the period.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Purchase analytics returned successfully"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Access denied — ADMIN or MANAGER role required", content = @Content(schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class)))
+    })
     @GetMapping("/purchase-analytics")
     @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     public ResponseEntity<ApiResponseWpp<DashboardPurchaseAnalyticsResponse>> getPurchaseAnalytics(
-            @RequestParam(required = false, defaultValue = "MONTH") DashboardPeriod period,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+            @Parameter(description = "Predefined time window. Ignored when startDate + endDate are both supplied.", schema = @Schema(implementation = DashboardPeriod.class, defaultValue = "MONTH")) @RequestParam(required = false, defaultValue = "MONTH") DashboardPeriod period,
+            @Parameter(description = "Custom range start date (yyyy-MM-dd). Must be paired with endDate.") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @Parameter(description = "Custom range end date (yyyy-MM-dd). Must be paired with startDate.") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+
         log.debug("GET /dashboard/purchase-analytics period={} start={} end={}", period, startDate, endDate);
-        DashboardPurchaseAnalyticsResponse data = dashboardService.getPurchaseAnalytics(period, startDate, endDate);
-        return ResponseEntity.ok(ApiResponseWpp.success(data));
+        return ResponseEntity.ok(ApiResponseWpp.success(
+                dashboardService.getPurchaseAnalytics(period, startDate, endDate)));
     }
 
     // ─── 5. Low Stock Alerts ──────────────────────────────────────────────────
 
-    /**
-     * GET /api/dashboard/low-stock-alerts
-     * <p>
-     * Returns all active products at or below their reorder level, with
-     * per-warehouse
-     * stock breakdown and CRITICAL / WARNING severity classification.
-     */
+    @Operation(summary = "Get low stock alerts", description = "Returns all active products whose total warehouse stock is at or below their reorder level. "
+            +
+            "Each product includes a per-warehouse quantity breakdown. " +
+            "Severity is CRITICAL when stock ≤ minStockLevel, otherwise WARNING.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Low stock alerts returned successfully"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthenticated request", content = @Content(schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class)))
+    })
     @GetMapping("/low-stock-alerts")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponseWpp<DashboardLowStockAlertsResponse>> getLowStockAlerts() {
         log.debug("GET /dashboard/low-stock-alerts");
-        DashboardLowStockAlertsResponse data = dashboardService.getLowStockAlerts();
-        return ResponseEntity.ok(ApiResponseWpp.success(data));
+        return ResponseEntity.ok(ApiResponseWpp.success(dashboardService.getLowStockAlerts()));
     }
 
     // ─── 6. Pending Actions ───────────────────────────────────────────────────
 
-    /**
-     * GET /api/dashboard/pending-actions
-     * <p>
-     * Returns all items requiring immediate user attention: PO / adjustment
-     * approvals,
-     * overdue invoices, pending shipments, and low-stock alert count.
-     */
+    @Operation(summary = "Get pending actions", description = "Returns all items requiring immediate user attention: purchase orders and stock "
+            +
+            "adjustments awaiting approval, overdue invoices with outstanding balance, " +
+            "pending shipments with the oldest entry highlighted, and the current low-stock count.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Pending actions returned successfully"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Access denied — ADMIN or MANAGER role required", content = @Content(schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class)))
+    })
     @GetMapping("/pending-actions")
     @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     public ResponseEntity<ApiResponseWpp<DashboardPendingActionsResponse>> getPendingActions() {
         log.debug("GET /dashboard/pending-actions");
-        DashboardPendingActionsResponse data = dashboardService.getPendingActions();
-        return ResponseEntity.ok(ApiResponseWpp.success(data));
+        return ResponseEntity.ok(ApiResponseWpp.success(dashboardService.getPendingActions()));
     }
 
     // ─── 7. Activity Feed ─────────────────────────────────────────────────────
 
-    /**
-     * GET /api/dashboard/activity-feed
-     * <p>
-     * Returns a chronological feed of the most recent system events:
-     * sales order changes, PO status updates, and shipment deliveries.
-     *
-     * @param limit maximum number of activities to return (default 20, max 100)
-     */
+    @Operation(summary = "Get activity feed", description = "Returns a reverse-chronological feed of recent system events merged from "
+            +
+            "sales orders, purchase order status changes, and delivered shipments. " +
+            "Maximum 100 entries per request.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Activity feed returned successfully"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthenticated request", content = @Content(schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class)))
+    })
     @GetMapping("/activity-feed")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponseWpp<DashboardActivityFeedResponse>> getActivityFeed(
-            @RequestParam(required = false, defaultValue = "20") int limit) {
+            @Parameter(description = "Maximum number of activities to return. Capped at 100.", example = "20") @RequestParam(required = false, defaultValue = "20") int limit) {
+
         limit = Math.min(limit, 100);
         log.debug("GET /dashboard/activity-feed limit={}", limit);
-        DashboardActivityFeedResponse data = dashboardService.getActivityFeed(limit);
-        return ResponseEntity.ok(ApiResponseWpp.success(data));
+        return ResponseEntity.ok(ApiResponseWpp.success(dashboardService.getActivityFeed(limit)));
     }
 
     // ─── 8. Inventory Trend Chart ─────────────────────────────────────────────
 
-    /**
-     * GET /api/dashboard/charts/inventory-trend
-     * <p>
-     * Returns per-day inventory-value snapshots for the requested period.
-     * Optionally filtered to a single warehouse.
-     *
-     * @param period      time window (default MONTH)
-     * @param warehouseId optional warehouse filter
-     */
+    @Operation(summary = "Get inventory trend chart data", description = "Returns one data point per calendar day in the requested period. "
+            +
+            "Each point contains total inventory value, active product count, and low-stock count. " +
+            "Optionally scoped to a single warehouse.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Inventory trend data returned successfully"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthenticated request", content = @Content(schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class)))
+    })
     @GetMapping("/charts/inventory-trend")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponseWpp<DashboardInventoryTrendResponse>> getInventoryTrend(
-            @RequestParam(required = false, defaultValue = "MONTH") DashboardPeriod period,
-            @RequestParam(required = false) Long warehouseId) {
+            @Parameter(description = "Time window for the chart.", schema = @Schema(implementation = DashboardPeriod.class, defaultValue = "MONTH")) @RequestParam(required = false, defaultValue = "MONTH") DashboardPeriod period,
+            @Parameter(description = "Scope chart data to a single warehouse ID") @RequestParam(required = false) Long warehouseId) {
+
         log.debug("GET /dashboard/charts/inventory-trend period={} warehouseId={}", period, warehouseId);
-        DashboardInventoryTrendResponse data = dashboardService.getInventoryTrend(period, warehouseId);
-        return ResponseEntity.ok(ApiResponseWpp.success(data));
+        return ResponseEntity.ok(ApiResponseWpp.success(
+                dashboardService.getInventoryTrend(period, warehouseId)));
     }
 
     // ─── 9. Sales Trend Chart ─────────────────────────────────────────────────
 
-    /**
-     * GET /api/dashboard/charts/sales-trend
-     * <p>
-     * Returns per-day order count and revenue data, plus a period-over-period
-     * growth comparison.
-     *
-     * @param period time window (default MONTH)
-     */
+    @Operation(summary = "Get sales trend chart data", description = "Returns daily order count, revenue, and items-sold figures for the requested period, "
+            +
+            "plus a period-over-period comparison showing growth percentages for orders and revenue.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Sales trend data returned successfully"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Access denied — ADMIN or MANAGER role required", content = @Content(schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class)))
+    })
     @GetMapping("/charts/sales-trend")
     @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     public ResponseEntity<ApiResponseWpp<DashboardSalesTrendResponse>> getSalesTrend(
-            @RequestParam(required = false, defaultValue = "MONTH") DashboardPeriod period) {
+            @Parameter(description = "Time window for the chart.", schema = @Schema(implementation = DashboardPeriod.class, defaultValue = "MONTH")) @RequestParam(required = false, defaultValue = "MONTH") DashboardPeriod period) {
+
         log.debug("GET /dashboard/charts/sales-trend period={}", period);
-        DashboardSalesTrendResponse data = dashboardService.getSalesTrend(period);
-        return ResponseEntity.ok(ApiResponseWpp.success(data));
+        return ResponseEntity.ok(ApiResponseWpp.success(dashboardService.getSalesTrend(period)));
     }
 
     // ─── 10. Top Selling Products Chart ──────────────────────────────────────
 
-    /**
-     * GET /api/dashboard/charts/top-selling-products
-     * <p>
-     * Returns the top N products by revenue for the given period.
-     * Each entry includes units sold, revenue, and percentage share of total period
-     * revenue.
-     *
-     * @param period time window (default MONTH)
-     * @param limit  number of products to return (default 10)
-     */
+    @Operation(summary = "Get top selling products chart data", description = "Returns the top N products ranked by revenue in the requested period. "
+            +
+            "Each entry includes units sold, revenue, and percentage share of total period revenue. " +
+            "Default limit is 10.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Top selling products returned successfully"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Access denied — ADMIN or MANAGER role required", content = @Content(schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class)))
+    })
     @GetMapping("/charts/top-selling-products")
     @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     public ResponseEntity<ApiResponseWpp<DashboardTopSellingProductsResponse>> getTopSellingProducts(
-            @RequestParam(required = false, defaultValue = "MONTH") DashboardPeriod period,
-            @RequestParam(required = false, defaultValue = "10") int limit) {
+            @Parameter(description = "Time window for the chart.", schema = @Schema(implementation = DashboardPeriod.class, defaultValue = "MONTH")) @RequestParam(required = false, defaultValue = "MONTH") DashboardPeriod period,
+            @Parameter(description = "Number of top products to return.", example = "10") @RequestParam(required = false, defaultValue = "10") int limit) {
+
         log.debug("GET /dashboard/charts/top-selling-products period={} limit={}", period, limit);
-        DashboardTopSellingProductsResponse data = dashboardService.getTopSellingProducts(period, limit);
-        return ResponseEntity.ok(ApiResponseWpp.success(data));
+        return ResponseEntity.ok(ApiResponseWpp.success(
+                dashboardService.getTopSellingProducts(period, limit)));
     }
 }

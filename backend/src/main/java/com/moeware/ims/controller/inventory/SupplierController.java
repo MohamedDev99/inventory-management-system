@@ -48,7 +48,7 @@ import lombok.extern.slf4j.Slf4j;
  * @author MoeWare Team
  */
 @RestController
-@RequestMapping("/api/v1/suppliers")
+@RequestMapping("/api/suppliers")
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Suppliers", description = "Supplier management APIs")
@@ -74,7 +74,7 @@ public class SupplierController {
                         @Parameter(description = "Search by name, code, or email") @RequestParam(required = false) String search,
                         @PageableDefault(size = 20, sort = "name", direction = Sort.Direction.ASC) Pageable pageable) {
 
-                log.info("GET /api/v1/suppliers - Fetching suppliers with filters");
+                log.info("GET /api/suppliers - Fetching suppliers with filters");
 
                 Page<SupplierResponse> suppliers = supplierService.getAllSuppliers(
                                 isActive, country, minRating, maxRating, search, pageable);
@@ -96,7 +96,7 @@ public class SupplierController {
         public ResponseEntity<ApiResponseWpp<SupplierResponse>> getSupplierById(
                         @Parameter(description = "Supplier ID", required = true) @PathVariable Long id) {
 
-                log.info("GET /api/v1/suppliers/{} - Fetching supplier", id);
+                log.info("GET /api/suppliers/{} - Fetching supplier", id);
 
                 SupplierResponse supplier = supplierService.getSupplierById(id);
 
@@ -117,7 +117,7 @@ public class SupplierController {
         public ResponseEntity<ApiResponseWpp<SupplierResponse>> getSupplierByCode(
                         @Parameter(description = "Supplier code", required = true) @PathVariable String code) {
 
-                log.info("GET /api/v1/suppliers/code/{} - Fetching supplier by code", code);
+                log.info("GET /api/suppliers/code/{} - Fetching supplier by code", code);
 
                 SupplierResponse supplier = supplierService.getSupplierByCode(code);
 
@@ -138,7 +138,7 @@ public class SupplierController {
         public ResponseEntity<ApiResponseWpp<SupplierResponse>> createSupplier(
                         @Parameter(description = "Supplier data", required = true) @Valid @RequestBody SupplierRequest supplierRequest) {
 
-                log.info("POST /api/v1/suppliers - Creating new supplier with code: {}", supplierRequest.getCode());
+                log.info("POST /api/suppliers - Creating new supplier with code: {}", supplierRequest.getCode());
 
                 SupplierResponse createdSupplier = supplierService.createSupplier(supplierRequest);
 
@@ -165,7 +165,7 @@ public class SupplierController {
                         @Parameter(description = "Supplier ID", required = true) @PathVariable Long id,
                         @Parameter(description = "Updated supplier data", required = true) @Valid @RequestBody SupplierRequest supplierRequest) {
 
-                log.info("PUT /api/v1/suppliers/{} - Updating supplier", id);
+                log.info("PUT /api/suppliers/{} - Updating supplier", id);
 
                 SupplierResponse updatedSupplier = supplierService.updateSupplier(id, supplierRequest);
 
@@ -188,7 +188,7 @@ public class SupplierController {
                         @Parameter(description = "Supplier ID", required = true) @PathVariable Long id,
                         @Parameter(description = "Partial supplier data", required = true) @RequestBody SupplierPatchRequest supplierPatchRequest) {
 
-                log.info("PATCH /api/v1/suppliers/{} - Partially updating supplier", id);
+                log.info("PATCH /api/suppliers/{} - Partially updating supplier", id);
 
                 SupplierResponse updatedSupplier = supplierService.patchSupplier(id, supplierPatchRequest);
 
@@ -210,7 +210,7 @@ public class SupplierController {
         public ResponseEntity<ApiResponseWpp<Void>> deleteSupplier(
                         @Parameter(description = "Supplier ID", required = true) @PathVariable Long id) {
 
-                log.info("DELETE /api/v1/suppliers/{} - Soft deleting supplier", id);
+                log.info("DELETE /api/suppliers/{} - Soft deleting supplier", id);
 
                 supplierService.deleteSupplier(id);
 
@@ -230,7 +230,7 @@ public class SupplierController {
         public ResponseEntity<ApiResponseWpp<Page<SupplierResponse>>> getTopRatedSuppliers(
                         @PageableDefault(size = 10, sort = "rating", direction = Sort.Direction.DESC) Pageable pageable) {
 
-                log.info("GET /api/v1/suppliers/top-rated - Fetching top-rated suppliers");
+                log.info("GET /api/suppliers/top-rated - Fetching top-rated suppliers");
 
                 Page<SupplierResponse> suppliers = supplierService.getTopRatedSuppliers(pageable);
 
@@ -251,7 +251,7 @@ public class SupplierController {
                         @Parameter(description = "Search term", required = true) @RequestParam String term,
                         @PageableDefault(size = 20, sort = "name", direction = Sort.Direction.ASC) Pageable pageable) {
 
-                log.info("GET /api/v1/suppliers/search?term={} - Searching suppliers", term);
+                log.info("GET /api/suppliers/search?term={} - Searching suppliers", term);
 
                 Page<SupplierResponse> suppliers = supplierService.searchSuppliers(term, pageable);
 
@@ -270,7 +270,7 @@ public class SupplierController {
         @GetMapping("/count/active")
         public ResponseEntity<ApiResponseWpp<Long>> getActiveSupplierCount() {
 
-                log.info("GET /api/v1/suppliers/count/active - Getting active supplier count");
+                log.info("GET /api/suppliers/count/active - Getting active supplier count");
 
                 Long count = supplierService.getActiveSupplierCount();
 
@@ -295,7 +295,7 @@ public class SupplierController {
                         @Parameter(description = "End date for order date range (YYYY-MM-DD)") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
                         @PageableDefault(size = 20, sort = "orderDate", direction = Sort.Direction.DESC) Pageable pageable) {
 
-                log.info("GET /api/v1/suppliers/{}/orders - Fetching purchase orders", id);
+                log.info("GET /api/suppliers/{}/orders - Fetching purchase orders", id);
 
                 Page<PurchaseOrderResponse> orders = supplierService.getSupplierOrders(
                                 id, status, startDate, endDate, pageable);
@@ -317,7 +317,7 @@ public class SupplierController {
         public ResponseEntity<ApiResponseWpp<SupplierPerformanceDTO>> getSupplierPerformance(
                         @Parameter(description = "Supplier ID", required = true) @PathVariable Long id) {
 
-                log.info("GET /api/v1/suppliers/{}/performance - Fetching performance metrics", id);
+                log.info("GET /api/suppliers/{}/performance - Fetching performance metrics", id);
 
                 SupplierPerformanceDTO performance = supplierService.getSupplierPerformance(id);
 
