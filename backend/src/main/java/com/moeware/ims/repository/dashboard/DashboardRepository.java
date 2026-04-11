@@ -15,10 +15,152 @@ import org.springframework.data.domain.Pageable;
  * ({@link DashboardRepositoryImpl}) executes queries directly via
  * {@code EntityManager}. Keeping it as an interface lets tests swap in a stub
  * without spinning up a database.
+ *
+ * <h3>Projection records</h3>
+ * Every method that previously returned {@code List<Object[]>} now returns a
+ * {@code List} of a typed record defined as a nested type here. This gives
+ * compile-time safety: if a query's column set changes, the mapping in
+ * {@link DashboardRepositoryImpl} and the consumption in
+ * {@link com.moeware.ims.service.dashboard.DashboardService} both fail at
+ * compile time rather than throwing {@link ClassCastException} at runtime.
  */
 public interface DashboardRepository {
 
-        // ─── Overview Metrics ────────────────────────────────────────────────────
+        // ═══════════════════════════════════════════════════════════════════════════
+        // PROJECTION RECORDS
+        // Each record corresponds exactly to the column set of one query group.
+        // ═══════════════════════════════════════════════════════════════════════════
+
+        /** One calendar-day data point from the daily sales trend query. */
+        record DailySalesTrendRow(
+                        LocalDate orderDate,
+                        long orderCount,
+                        BigDecimal revenue,
+                        long itemsSold) {
+        }
+
+        /** One product entry from the top-selling-products query. */
+        record TopProductRow(
+                        Long productId,
+                        String sku,
+                        String name,
+                        long unitsSold,
+                        BigDecimal revenue) {
+        }
+
+        /** One customer entry from the top-customers query. */
+        record TopCustomerRow(
+                        Long customerId,
+                        String contactName,
+                        long orderCount,
+                        BigDecimal totalSpent) {
+        }
+
+        /** One status-count entry from the order-count-by-status query. */
+        record StatusCountRow(String status, long count) {
+        }
+
+        /** One month entry from the monthly purchase trend query. */
+        record MonthlyPurchaseTrendRow(
+                        /** YYYY-MM formatted string, e.g. {@code "2026-02"}. */
+                        String month,
+                        long orderCount,
+                        BigDecimal totalSpent) {
+        }
+
+        /** One supplier entry from the top-suppliers query. */
+        record TopSupplierRow(
+                        Long supplierId,
+                        String supplierName,
+                        long orderCount,
+                        BigDecimal totalSpent) {
+        }
+
+        /** One category entry from the category-spending query. */
+        record CategorySpendingRow(
+                        Long categoryId,
+                        String categoryName,
+                        BigDecimal totalSpent,
+                        long orderCount) {
+        }
+
+        /** One product row from the low-stock-with-warehouse-breakdown query. */
+        record LowStockWarehouseRow(
+                        Long productId,
+                        String sku,
+                        String name,
+                        int reorderLevel,
+                        int minStockLevel,
+                        Long warehouseId,
+                        String warehouseName,
+                        int warehouseQty) {
+        }
+
+        /** One sales-order row for the activity feed. */
+        record SalesOrderActivityRow(
+                        Long soId,
+                        String soNumber,
+                        String status,
+                        String customerName,
+                        BigDecimal totalAmount,
+                        LocalDateTime createdAt,
+                        Long userId,
+                        String username) {
+        }
+
+        /** One purchase-order row for the activity feed. */
+        record PurchaseOrderActivityRow(
+                        Long poId,
+                        String poNumber,
+                        String status,
+                        String supplierName,
+                        BigDecimal totalAmount,
+                        LocalDateTime updatedAt,
+                        Long userId,
+                        String username) {
+        }
+
+        /** One shipment delivery row for the activity feed. */
+        record DeliveryRow(
+                        Long shipmentId,
+                        String shipmentNumber,
+                        String customerName,
+                        LocalDateTime updatedAt,
+                        Long userId,
+                        String username) {
+        }
+
+        /** The oldest pending shipment row. */
+        record PendingShipmentRow(
+                        Long id,
+                        String shipmentNumber,
+                        LocalDateTime createdAt) {
+        }
+
+        /** One overdue invoice detail row. */
+        record OverdueInvoiceRow(
+                        Long invoiceId,
+                        String invoiceNumber,
+                        BigDecimal balanceDue,
+                        LocalDate dueDate,
+                        Long customerId,
+                        String contactName,
+                        LocalDateTime createdAt) {
+        }
+
+        /** One purchase-order approval queue row. */
+        record PendingPoApprovalRow(
+                        Long poId,
+                        String poNumber,
+                        BigDecimal totalAmount,
+                        LocalDateTime createdAt,
+                        Long userId,
+                        String username) {
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════════
+        // OVERVIEW METRICS
+        // ═══════════════════════════════════════════════════════════════════════════
 
         int countActiveProducts();
 
@@ -29,15 +171,21 @@ public interface DashboardRepository {
         BigDecimal totalInventoryValue();
 
         /**
-         * Count of active products whose total warehouse stock is <= reorderLevel but >
+         * Count of active products whose total warehouse stock is ≤ reorderLevel but >
          * 0.
+         * Uses a dedicated COUNT query — does not load product entities.
          */
         int countLowStockProducts();
 
-        /** Count of active products whose total warehouse stock is 0. */
+        /**
+         * Count of active products whose total warehouse stock is 0.
+         * Uses a dedicated COUNT query — does not load product entities.
+         */
         int countOutOfStockProducts();
 
-        // ─── Order Counts ────────────────────────────────────────────────────────
+        // ═══════════════════════════════════════════════════════════════════════════
+        // ORDER COUNTS
+        // ═══════════════════════════════════════════════════════════════════════════
 
         int countPendingSalesOrders();
 
@@ -48,7 +196,9 @@ public interface DashboardRepository {
 
         int countApprovedPurchaseOrders();
 
-        // ─── Today's Activity ────────────────────────────────────────────────────
+        // ═══════════════════════════════════════════════════════════════════════════
+        // TODAY'S ACTIVITY
+        // ═══════════════════════════════════════════════════════════════════════════
 
         int countSalesOrdersToday(LocalDate today);
 
@@ -58,19 +208,33 @@ public interface DashboardRepository {
 
         int countPurchaseOrdersReceivedToday(LocalDate today);
 
-        // ─── Alerts ──────────────────────────────────────────────────────────────
+        // ═══════════════════════════════════════════════════════════════════════════
+        // ALERTS
+        // ═══════════════════════════════════════════════════════════════════════════
 
+        /**
+         * Count of stock adjustments in PENDING status.
+         * Uses a dedicated COUNT query — does not load adjustment entities.
+         */
         int countPendingStockAdjustments();
 
+        /**
+         * Count of invoices past their due date that are not PAID or CANCELLED.
+         * Uses a dedicated COUNT query — does not load invoice entities.
+         */
         int countOverdueInvoices(LocalDate today);
 
-        // ─── Revenue ─────────────────────────────────────────────────────────────
+        // ═══════════════════════════════════════════════════════════════════════════
+        // REVENUE
+        // ═══════════════════════════════════════════════════════════════════════════
 
         BigDecimal revenueOnDate(LocalDate date);
 
         BigDecimal revenueBetween(LocalDate start, LocalDate end);
 
-        // ─── Purchase Spend ───────────────────────────────────────────────────────
+        // ═══════════════════════════════════════════════════════════════════════════
+        // PURCHASE SPEND
+        // ═══════════════════════════════════════════════════════════════════════════
 
         /** Total PO spend (non-cancelled POs) in the date range. */
         BigDecimal purchaseSpendBetween(LocalDate start, LocalDate end);
@@ -80,152 +244,76 @@ public interface DashboardRepository {
          */
         int totalItemsOrdered(LocalDate start, LocalDate end);
 
-        // ─── Sales Analytics ─────────────────────────────────────────────────────
+        // ═══════════════════════════════════════════════════════════════════════════
+        // SALES ANALYTICS
+        // ═══════════════════════════════════════════════════════════════════════════
+
+        List<DailySalesTrendRow> dailySalesTrend(LocalDate start, LocalDate end);
+
+        List<TopProductRow> topSellingProducts(LocalDate start, LocalDate end, Pageable pageable);
+
+        List<TopCustomerRow> topCustomers(LocalDate start, LocalDate end, Pageable pageable);
+
+        List<StatusCountRow> salesOrderCountByStatus(LocalDate start, LocalDate end);
+
+        // ═══════════════════════════════════════════════════════════════════════════
+        // PURCHASE ANALYTICS
+        // ═══════════════════════════════════════════════════════════════════════════
 
         /**
-         * Daily sales trend in the date range.
-         * <p>
-         * Columns: [0] orderDate(LocalDate) · [1] orderCount(Long) ·
-         * [2] revenue(BigDecimal) · [3] itemsSold(Long)
+         * Monthly PO count and spend.
+         * Implemented as a native PostgreSQL query using {@code TO_CHAR} for date
+         * grouping.
          */
-        List<Object[]> dailySalesTrend(LocalDate start, LocalDate end);
+        List<MonthlyPurchaseTrendRow> monthlyPurchaseTrend(LocalDate start, LocalDate end);
+
+        List<TopSupplierRow> topSuppliers(LocalDate start, LocalDate end, Pageable pageable);
+
+        List<CategorySpendingRow> categorySpending(LocalDate start, LocalDate end);
+
+        List<StatusCountRow> purchaseOrderCountByStatus(LocalDate start, LocalDate end);
+
+        // ═══════════════════════════════════════════════════════════════════════════
+        // INVENTORY TREND
+        // ═══════════════════════════════════════════════════════════════════════════
 
         /**
-         * Top selling products by revenue, limited by pageable.
-         * <p>
-         * Columns: [0] productId(Long) · [1] sku(String) · [2] name(String) ·
-         * [3] unitsSold(Long) · [4] revenue(BigDecimal)
-         */
-        List<Object[]> topSellingProducts(LocalDate start, LocalDate end, Pageable pageable);
-
-        /**
-         * Top customers by total spend, limited by pageable.
-         * <p>
-         * Columns: [0] customerId(Long) · [1] contactName(String) ·
-         * [2] orderCount(Long) · [3] totalSpent(BigDecimal)
-         */
-        List<Object[]> topCustomers(LocalDate start, LocalDate end, Pageable pageable);
-
-        /**
-         * Sales order count grouped by status.
-         * <p>
-         * Columns: [0] status(String) · [1] count(Long)
-         */
-        List<Object[]> salesOrderCountByStatus(LocalDate start, LocalDate end);
-
-        // ─── Purchase Analytics ───────────────────────────────────────────────────
-
-        /**
-         * Monthly PO count and spend (native query, PostgreSQL TO_CHAR).
-         * <p>
-         * Columns: [0] month(String "YYYY-MM") · [1] count(Long) · [2]
-         * totalSpent(BigDecimal)
-         */
-        List<Object[]> monthlyPurchaseTrend(LocalDate start, LocalDate end);
-
-        /**
-         * Top suppliers by total spend, limited by pageable.
-         * <p>
-         * Columns: [0] supplierId(Long) · [1] supplierName(String) ·
-         * [2] orderCount(Long) · [3] totalSpent(BigDecimal)
-         */
-        List<Object[]> topSuppliers(LocalDate start, LocalDate end, Pageable pageable);
-
-        /**
-         * Spending per product category.
-         * <p>
-         * Columns: [0] categoryId(Long) · [1] categoryName(String) ·
-         * [2] totalSpent(BigDecimal) · [3] orderCount(Long)
-         */
-        List<Object[]> categorySpending(LocalDate start, LocalDate end);
-
-        /**
-         * Purchase order count grouped by status.
-         * <p>
-         * Columns: [0] status(String) · [1] count(Long)
-         */
-        List<Object[]> purchaseOrderCountByStatus(LocalDate start, LocalDate end);
-
-        // ─── Inventory Trend ─────────────────────────────────────────────────────
-
-        /**
-         * Daily net inventory quantity change from movement records (native query).
-         * <p>
-         * Columns: [0] snapDate(Date) · [1] netChange(Long)
+         * Daily net inventory quantity change derived from movement records.
+         * Implemented as a native query.
          */
         List<Object[]> dailyInventoryNetChange(LocalDateTime start, LocalDateTime end);
 
-        /** Current count of active products at or below their reorder level. */
+        /**
+         * Current count of active products at or below their reorder level.
+         * Uses a dedicated COUNT query — does not load product entities.
+         */
         int currentLowStockCount();
 
-        // ─── Low Stock Detail ────────────────────────────────────────────────────
+        // ═══════════════════════════════════════════════════════════════════════════
+        // LOW STOCK DETAIL
+        // ═══════════════════════════════════════════════════════════════════════════
 
-        /**
-         * All products below reorder level with per-warehouse quantity.
-         * <p>
-         * Columns: [0] productId(Long) · [1] sku(String) · [2] name(String) ·
-         * [3] reorderLevel(Integer) · [4] minStockLevel(Integer) ·
-         * [5] warehouseId(Long) · [6] warehouseName(String) · [7] warehouseQty(Integer)
-         */
-        List<Object[]> lowStockProductsWithWarehouseBreakdown();
+        List<LowStockWarehouseRow> lowStockProductsWithWarehouseBreakdown();
 
-        // ─── Activity Feed ────────────────────────────────────────────────────────
+        // ═══════════════════════════════════════════════════════════════════════════
+        // ACTIVITY FEED
+        // ═══════════════════════════════════════════════════════════════════════════
 
-        /**
-         * Most recent sales orders for the activity feed.
-         * <p>
-         * Columns: [0] soId(Long) · [1] soNumber(String) · [2] status(String) ·
-         * [3] customerName(String) · [4] totalAmount(BigDecimal) ·
-         * [5] createdAt(LocalDateTime) · [6] userId(Long) · [7] username(String)
-         */
-        List<Object[]> recentSalesOrderActivity(Pageable pageable);
+        List<SalesOrderActivityRow> recentSalesOrderActivity(Pageable pageable);
 
-        /**
-         * Most recent purchase order events for the activity feed.
-         * <p>
-         * Columns: [0] poId(Long) · [1] poNumber(String) · [2] status(String) ·
-         * [3] supplierName(String) · [4] totalAmount(BigDecimal) ·
-         * [5] updatedAt(LocalDateTime) · [6] userId(Long) · [7] username(String)
-         */
-        List<Object[]> recentPurchaseOrderActivity(Pageable pageable);
+        List<PurchaseOrderActivityRow> recentPurchaseOrderActivity(Pageable pageable);
 
-        /**
-         * Most recent shipment deliveries for the activity feed.
-         * <p>
-         * Columns: [0] shipId(Long) · [1] shipNumber(String) · [2] customerName(String)
-         * ·
-         * [3] updatedAt(LocalDateTime) · [4] userId(Long) · [5] username(String)
-         */
-        List<Object[]> recentDeliveries(Pageable pageable);
+        List<DeliveryRow> recentDeliveries(Pageable pageable);
 
-        // ─── Pending Actions ─────────────────────────────────────────────────────
+        // ═══════════════════════════════════════════════════════════════════════════
+        // PENDING ACTIONS
+        // ═══════════════════════════════════════════════════════════════════════════
 
-        /**
-         * Oldest pending shipment(s), ordered by createdAt ASC.
-         * <p>
-         * Columns: [0] id(Long) · [1] shipmentNumber(String) · [2]
-         * createdAt(LocalDateTime)
-         */
-        List<Object[]> oldestPendingShipment(Pageable pageable);
+        List<PendingShipmentRow> oldestPendingShipment(Pageable pageable);
 
         int countPendingShipments();
 
-        /**
-         * Detail rows for overdue invoices.
-         * <p>
-         * Columns: [0] invoiceId(Long) · [1] invoiceNumber(String) · [2]
-         * balanceDue(BigDecimal) ·
-         * [3] dueDate(LocalDate) · [4] customerId(Long) · [5] contactName(String) ·
-         * [6] createdAt(LocalDateTime)
-         */
-        List<Object[]> overdueInvoiceDetails(LocalDate today);
+        List<OverdueInvoiceRow> overdueInvoiceDetails(LocalDate today);
 
-        /**
-         * Purchase orders currently awaiting approval (status = SUBMITTED).
-         * <p>
-         * Columns: [0] poId(Long) · [1] poNumber(String) · [2] totalAmount(BigDecimal)
-         * ·
-         * [3] createdAt(LocalDateTime) · [4] userId(Long) · [5] username(String)
-         */
-        List<Object[]> pendingPurchaseOrderApprovals(Pageable pageable);
+        List<PendingPoApprovalRow> pendingPurchaseOrderApprovals(Pageable pageable);
 }

@@ -1,4 +1,4 @@
-package com.moeware.ims.enums;
+package com.moeware.ims.enums.dashboard;
 
 /**
  * Time period options for dashboard analytics queries.

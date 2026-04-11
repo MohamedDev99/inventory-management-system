@@ -10,6 +10,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -170,11 +171,12 @@ public class StockAdjustmentController {
         @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
         public ResponseEntity<ApiResponseWpp<StockAdjustmentResponse>> approveAdjustment(
                         @Parameter(description = "Adjustment ID", required = true) @PathVariable Long id,
-                        @Valid @RequestBody StockAdjustmentApproveRequest request) {
+                        @Valid @RequestBody StockAdjustmentApproveRequest request,
+                        Authentication authentication) {
 
-                log.info("PATCH /api/stock-adjustments/{}/approve - approvedBy={}", id, request.getApprovedBy());
+                log.info("PATCH /api/v1/stock-adjustments/{}/approve - actor={}", id, authentication.getName());
                 return ResponseEntity.ok(ApiResponseWpp.success(
-                                stockAdjustmentService.approveAdjustment(id, request),
+                                stockAdjustmentService.approveAdjustment(id, request, authentication),
                                 "Stock adjustment approved successfully"));
         }
 
@@ -192,11 +194,12 @@ public class StockAdjustmentController {
         @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
         public ResponseEntity<ApiResponseWpp<StockAdjustmentResponse>> rejectAdjustment(
                         @Parameter(description = "Adjustment ID", required = true) @PathVariable Long id,
-                        @Valid @RequestBody StockAdjustmentRejectRequest request) {
+                        @Valid @RequestBody StockAdjustmentRejectRequest request,
+                        Authentication authentication) {
 
-                log.info("PATCH /api/stock-adjustments/{}/reject - rejectedBy={}", id, request.getRejectedBy());
+                log.info("PATCH /api/v1/stock-adjustments/{}/reject - actor={}", id, authentication.getName());
                 return ResponseEntity.ok(ApiResponseWpp.success(
-                                stockAdjustmentService.rejectAdjustment(id, request),
+                                stockAdjustmentService.rejectAdjustment(id, request, authentication),
                                 "Stock adjustment rejected successfully"));
         }
 }

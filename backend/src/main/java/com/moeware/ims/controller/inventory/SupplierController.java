@@ -251,7 +251,8 @@ public class SupplierController {
                         @Parameter(description = "Search term", required = true) @RequestParam String term,
                         @PageableDefault(size = 20, sort = "name", direction = Sort.Direction.ASC) Pageable pageable) {
 
-                log.info("GET /api/suppliers/search?term={} - Searching suppliers", term);
+                log.info("GET /api/suppliers/search - Searching suppliers");
+                log.debug("Supplier search requested (termLength={})", term == null ? 0 : term.length());
 
                 Page<SupplierResponse> suppliers = supplierService.searchSuppliers(term, pageable);
 

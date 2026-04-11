@@ -141,6 +141,67 @@ public interface ProductRepository extends JpaRepository<Product, Long>, JpaSpec
                         "AND p.isActive = true")
         List<Product> findOutOfStockProducts();
 
+        // ─── Low stock / out-of-stock COUNT queries ───────────────────────────────
+
+        /**
+         * Count active products whose summed warehouse stock is at or below their
+         * reorder level but still greater than zero (i.e. low stock, not out of stock).
+         * <p>
+         * Uses a {@code GROUP BY / HAVING} aggregation so that stock is summed across
+         * all warehouses before the threshold comparison — a per-row join condition
+         * would give incorrect results when a product spans multiple warehouses.
+         * <p>
+         * Preferred over {@code findLowStockProducts().size()} when only the count is
+         * needed, as no product entities are loaded into memory.
+         *
+         * @return count of active low-stock products (0 &lt; total stock ≤
+         *         reorderLevel)
+         */
+        @Query("SELECT COUNT(p.id) FROM Product p " +
+                        "JOIN p.inventoryItems ii " +
+                        "WHERE p.isActive = true " +
+                        "GROUP BY p.id " +
+                        "HAVING SUM(ii.quantity) <= p.reorderLevel AND SUM(ii.quantity) > 0")
+        long countLowStockProducts();
+
+        /**
+         * Count active products whose summed warehouse stock is zero across all
+         * warehouses.
+         * <p>
+         * Uses a {@code GROUP BY / HAVING} aggregation for the same reason as
+         * {@link #countLowStockProducts()}.
+         * <p>
+         * Preferred over {@code findOutOfStockProducts().size()} when only the count
+         * is needed.
+         *
+         * @return count of active out-of-stock products (total stock = 0)
+         */
+        @Query("SELECT COUNT(p.id) FROM Product p " +
+                        "JOIN p.inventoryItems ii " +
+                        "WHERE p.isActive = true " +
+                        "GROUP BY p.id " +
+                        "HAVING SUM(ii.quantity) = 0")
+        long countOutOfStockProducts();
+
+        /**
+         * Count active products whose summed warehouse stock is at or below their
+         * reorder level, including those with zero stock.
+         * <p>
+         * This is the superset of {@link #countLowStockProducts()} — it covers both
+         * low-stock and out-of-stock products. Used by the dashboard inventory-trend
+         * chart to show the current low-stock snapshot count.
+         *
+         * @return count of active products with total stock ≤ reorderLevel
+         */
+        @Query("SELECT COUNT(p.id) FROM Product p " +
+                        "JOIN p.inventoryItems ii " +
+                        "WHERE p.isActive = true " +
+                        "GROUP BY p.id " +
+                        "HAVING SUM(ii.quantity) <= p.reorderLevel")
+        long countAtOrBelowReorderLevel();
+
+        // ─── Counts ───────────────────────────────────────────────────────────────
+
         /**
          * Count active products
          *
@@ -155,6 +216,8 @@ public interface ProductRepository extends JpaRepository<Product, Long>, JpaSpec
          * @return count of products in category
          */
         long countByCategoryId(Long categoryId);
+
+        // ─── Miscellaneous ────────────────────────────────────────────────────────
 
         /**
          * Find all products in multiple categories

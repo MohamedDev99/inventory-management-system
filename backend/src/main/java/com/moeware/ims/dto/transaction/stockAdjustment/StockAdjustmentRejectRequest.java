@@ -2,7 +2,6 @@ package com.moeware.ims.dto.transaction.stockAdjustment;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -21,10 +20,6 @@ import lombok.NoArgsConstructor;
 @Schema(description = "Request body for rejecting a pending stock adjustment. " +
         "No inventory change is made. The rejection reason is recorded in the adjustment notes.")
 public class StockAdjustmentRejectRequest {
-
-    @Schema(description = "ID of the manager or admin rejecting the adjustment", example = "2", requiredMode = Schema.RequiredMode.REQUIRED)
-    @NotNull(message = "Rejected by user ID is required")
-    private Long rejectedBy;
 
     @Schema(description = "Reason for rejection — required so the submitting staff member can act on the feedback", example = "Insufficient documentation provided. Please attach the inspection report.", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotBlank(message = "Rejection reason is required")

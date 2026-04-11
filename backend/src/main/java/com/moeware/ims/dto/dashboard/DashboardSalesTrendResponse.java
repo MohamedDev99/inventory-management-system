@@ -4,7 +4,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
-import com.moeware.ims.enums.DashboardPeriod;
+import com.moeware.ims.enums.dashboard.DashboardPeriod;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;

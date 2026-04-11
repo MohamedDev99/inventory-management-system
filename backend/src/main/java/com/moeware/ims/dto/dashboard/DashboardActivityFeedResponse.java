@@ -4,6 +4,8 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import com.moeware.ims.enums.dashboard.DashboardActivityType;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -42,7 +44,7 @@ public class DashboardActivityFeedResponse {
                 "PURCHASE_ORDER_APPROVED", "PURCHASE_ORDER_UPDATED",
                 "SHIPMENT_DELIVERED"
         })
-        private String type;
+        private DashboardActivityType type;
 
         @Schema(description = "Human-readable title for the activity", example = "New sales order created")
         private String title;

@@ -3,7 +3,6 @@ package com.moeware.ims.service;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -29,8 +28,15 @@ import com.moeware.ims.dto.dashboard.DashboardSalesAnalyticsResponse;
 import com.moeware.ims.dto.dashboard.DashboardSalesTrendResponse;
 import com.moeware.ims.dto.dashboard.DashboardTopSellingProductsResponse;
 import com.moeware.ims.entity.inventory.InventoryItem;
-import com.moeware.ims.enums.DashboardPeriod;
+import com.moeware.ims.enums.dashboard.DashboardActivityType;
+import com.moeware.ims.enums.dashboard.DashboardPeriod;
 import com.moeware.ims.repository.dashboard.DashboardRepository;
+import com.moeware.ims.repository.dashboard.DashboardRepository.DailySalesTrendRow;
+import com.moeware.ims.repository.dashboard.DashboardRepository.LowStockWarehouseRow;
+import com.moeware.ims.repository.dashboard.DashboardRepository.OverdueInvoiceRow;
+import com.moeware.ims.repository.dashboard.DashboardRepository.PendingPoApprovalRow;
+import com.moeware.ims.repository.dashboard.DashboardRepository.PendingShipmentRow;
+import com.moeware.ims.repository.dashboard.DashboardRepository.TopProductRow;
 import com.moeware.ims.repository.inventory.InventoryItemRepository;
 import com.moeware.ims.repository.staff.WarehouseRepository;
 
@@ -43,6 +49,11 @@ import lombok.extern.slf4j.Slf4j;
  * All methods are read-only. Raw query execution is fully delegated to
  * {@link DashboardRepository} so this class is responsible only for
  * orchestration and DTO assembly.
+ * <p>
+ * The service accesses query results through the named projection records
+ * defined in {@link DashboardRepository} (e.g. {@link DailySalesTrendRow},
+ * {@link TopProductRow}) — never through positional {@code Object[]} array
+ * access.
  */
 @Service
 @RequiredArgsConstructor
@@ -71,7 +82,6 @@ public class DashboardService {
                 LocalDate lastMonthStart = monthStart.minusMonths(1);
                 LocalDate lastMonthEnd = monthStart.minusDays(1);
 
-                // ── Metrics ──────────────────────────────────────────────────────────
                 int totalProducts = dashboardRepository.countActiveProducts();
                 BigDecimal inventoryValue = dashboardRepository.totalInventoryValue();
                 int lowStock = dashboardRepository.countLowStockProducts();
@@ -79,28 +89,23 @@ public class DashboardService {
                 int warehouses = dashboardRepository.countActiveWarehouses();
                 int activeUsers = dashboardRepository.countActiveUsers();
 
-                // ── Orders ────────────────────────────────────────────────────────────
                 int pendingSO = dashboardRepository.countPendingSalesOrders();
                 int confirmedSO = dashboardRepository.countConfirmedSalesOrders();
                 int pendingPO = dashboardRepository.countPendingPurchaseOrders();
                 int approvedPO = dashboardRepository.countApprovedPurchaseOrders();
 
-                // ── Today's activity ──────────────────────────────────────────────────
                 int soToday = dashboardRepository.countSalesOrdersToday(today);
                 int poToday = dashboardRepository.countPurchaseOrdersToday(today);
                 int shipmentsToday = dashboardRepository.countShipmentsToday(today);
                 int receivedToday = dashboardRepository.countPurchaseOrdersReceivedToday(today);
 
-                // ── Alerts ────────────────────────────────────────────────────────────
                 int pendingAdj = dashboardRepository.countPendingStockAdjustments();
                 int overdueInvoices = dashboardRepository.countOverdueInvoices(today);
 
-                // ── Revenue ───────────────────────────────────────────────────────────
                 BigDecimal revenueToday = dashboardRepository.revenueOnDate(today);
                 BigDecimal revenueWeek = dashboardRepository.revenueBetween(weekStart, today);
                 BigDecimal revenueThisMonth = dashboardRepository.revenueBetween(monthStart, today);
                 BigDecimal revenueLastMonth = dashboardRepository.revenueBetween(lastMonthStart, lastMonthEnd);
-                double growth = growthPercent(revenueLastMonth, revenueThisMonth);
 
                 return DashboardOverviewResponse.builder()
                                 .metrics(DashboardOverviewResponse.MetricsDTO.builder()
@@ -134,7 +139,7 @@ public class DashboardService {
                                                 .thisWeek(revenueWeek)
                                                 .thisMonth(revenueThisMonth)
                                                 .lastMonth(revenueLastMonth)
-                                                .growth(growth)
+                                                .growth(growthPercent(revenueLastMonth, revenueThisMonth))
                                                 .build())
                                 .build();
         }
@@ -148,24 +153,20 @@ public class DashboardService {
         public DashboardInventorySummaryResponse getInventorySummary(Long warehouseId, Long categoryId) {
                 log.debug("Building inventory summary warehouseId={} categoryId={}", warehouseId, categoryId);
 
-                // Load inventory items (scoped by warehouse if requested)
                 List<InventoryItem> allItems = warehouseId != null
                                 ? inventoryItemRepository.findByWarehouse(
                                                 warehouseRepository.getReferenceById(warehouseId),
                                                 Pageable.unpaged()).getContent()
                                 : inventoryItemRepository.findAll();
 
-                // Apply optional category filter
                 if (categoryId != null) {
                         allItems = allItems.stream()
                                         .filter(i -> categoryId.equals(i.getProduct().getCategory().getId()))
                                         .toList();
                 }
 
-                // ── Aggregate per-product totals ──────────────────────────────────────
                 Map<Long, Integer> stockByProduct = new LinkedHashMap<>();
-                allItems.forEach(i -> stockByProduct.merge(i.getProduct().getId(), i.getQuantity(),
-                                (k, v) -> k + v.intValue()));
+                allItems.forEach(i -> stockByProduct.merge(i.getProduct().getId(), i.getQuantity(), Integer::sum));
 
                 int totalProducts = stockByProduct.size();
                 int inStock = 0, lowStockCount = 0, outOfStockCount = 0;
@@ -181,16 +182,13 @@ public class DashboardService {
                 }
 
                 BigDecimal costValue = allItems.stream()
-                                .map(i -> i.getProduct().getCostPrice()
-                                                .multiply(BigDecimal.valueOf(i.getQuantity())))
+                                .map(i -> i.getProduct().getCostPrice().multiply(BigDecimal.valueOf(i.getQuantity())))
                                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-
                 BigDecimal retailValue = allItems.stream()
-                                .map(i -> i.getProduct().getUnitPrice()
-                                                .multiply(BigDecimal.valueOf(i.getQuantity())))
+                                .map(i -> i.getProduct().getUnitPrice().multiply(BigDecimal.valueOf(i.getQuantity())))
                                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-                // ── By category ───────────────────────────────────────────────────────
+                // By category
                 Map<Long, CategoryAgg> catMap = new LinkedHashMap<>();
                 for (InventoryItem item : allItems) {
                         var cat = item.getProduct().getCategory();
@@ -199,22 +197,18 @@ public class DashboardService {
                         agg.totalValue = agg.totalValue.add(
                                         item.getProduct().getUnitPrice()
                                                         .multiply(BigDecimal.valueOf(item.getQuantity())));
-                        if (item.getQuantity() <= item.getProduct().getReorderLevel()) {
+                        if (item.getQuantity() <= item.getProduct().getReorderLevel())
                                 agg.lowStockCount++;
-                        }
                 }
 
                 List<DashboardInventorySummaryResponse.CategoryBreakdownDTO> byCategory = catMap.values().stream()
                                 .map(a -> DashboardInventorySummaryResponse.CategoryBreakdownDTO.builder()
-                                                .categoryId(a.id)
-                                                .categoryName(a.name)
-                                                .productCount(a.productIds.size())
-                                                .totalValue(a.totalValue)
-                                                .lowStockCount(a.lowStockCount)
-                                                .build())
+                                                .categoryId(a.id).categoryName(a.name)
+                                                .productCount(a.productIds.size()).totalValue(a.totalValue)
+                                                .lowStockCount(a.lowStockCount).build())
                                 .toList();
 
-                // ── By warehouse ──────────────────────────────────────────────────────
+                // By warehouse
                 Map<Long, WarehouseAgg> whMap = new LinkedHashMap<>();
                 for (InventoryItem item : allItems) {
                         var wh = item.getWarehouse();
@@ -230,8 +224,7 @@ public class DashboardService {
 
                 List<DashboardInventorySummaryResponse.WarehouseBreakdownDTO> byWarehouse = whMap.values().stream()
                                 .map(a -> DashboardInventorySummaryResponse.WarehouseBreakdownDTO.builder()
-                                                .warehouseId(a.id)
-                                                .warehouseName(a.name)
+                                                .warehouseId(a.id).warehouseName(a.name)
                                                 .productCount(a.productIds.size())
                                                 .totalValue(a.totalValue)
                                                 .utilization(a.capacity > 0
@@ -240,7 +233,7 @@ public class DashboardService {
                                                 .build())
                                 .toList();
 
-                // ── Top products by retail value ───────────────────────────────────────
+                // Top products by retail value
                 List<DashboardInventorySummaryResponse.TopProductDTO> topProducts = allItems.stream()
                                 .collect(Collectors.groupingBy(i -> i.getProduct().getId()))
                                 .entrySet().stream()
@@ -250,31 +243,23 @@ public class DashboardService {
                                         return DashboardInventorySummaryResponse.TopProductDTO.builder()
                                                         .productId(first.getProduct().getId())
                                                         .sku(first.getProduct().getSku())
-                                                        .name(first.getProduct().getName())
-                                                        .totalQuantity(qty)
+                                                        .name(first.getProduct().getName()).totalQuantity(qty)
                                                         .totalValue(first.getProduct().getUnitPrice()
                                                                         .multiply(BigDecimal.valueOf(qty)))
                                                         .build();
                                 })
                                 .sorted((a, b) -> b.getTotalValue().compareTo(a.getTotalValue()))
-                                .limit(TOP_N)
-                                .toList();
+                                .limit(TOP_N).toList();
 
                 return DashboardInventorySummaryResponse.builder()
                                 .totalProducts(totalProducts)
                                 .totalValue(DashboardInventorySummaryResponse.TotalValueDTO.builder()
-                                                .cost(costValue)
-                                                .retail(retailValue)
-                                                .potentialProfit(retailValue.subtract(costValue))
-                                                .build())
+                                                .cost(costValue).retail(retailValue)
+                                                .potentialProfit(retailValue.subtract(costValue)).build())
                                 .stockStatus(DashboardInventorySummaryResponse.StockStatusDTO.builder()
-                                                .inStock(inStock)
-                                                .lowStock(lowStockCount)
-                                                .outOfStock(outOfStockCount)
+                                                .inStock(inStock).lowStock(lowStockCount).outOfStock(outOfStockCount)
                                                 .build())
-                                .byCategory(byCategory)
-                                .byWarehouse(byWarehouse)
-                                .topProducts(topProducts)
+                                .byCategory(byCategory).byWarehouse(byWarehouse).topProducts(topProducts)
                                 .build();
         }
 
@@ -282,8 +267,6 @@ public class DashboardService {
 
         /**
          * Returns sales performance for the given period or custom date range.
-         * Includes totals, status distribution, top products/customers, daily trend,
-         * and period-over-period growth.
          */
         public DashboardSalesAnalyticsResponse getSalesAnalytics(
                         DashboardPeriod period, LocalDate startDate, LocalDate endDate) {
@@ -291,80 +274,68 @@ public class DashboardService {
                 DateRange range = resolve(period, startDate, endDate);
                 log.debug("Sales analytics {} → {}", range.start, range.end);
 
-                // ── Daily trend (drives summary totals) ───────────────────────────────
-                List<Object[]> trendRows = dashboardRepository.dailySalesTrend(range.start, range.end);
+                // Daily trend drives summary totals
+                List<DailySalesTrendRow> trendRows = dashboardRepository.dailySalesTrend(range.start, range.end);
 
-                int totalOrders = trendRows.stream().mapToInt(r -> toLong(r[1]).intValue()).sum();
+                int totalOrders = trendRows.stream().mapToInt(r -> (int) r.orderCount()).sum();
                 BigDecimal totalRevenue = trendRows.stream()
-                                .map(r -> (BigDecimal) r[2]).reduce(BigDecimal.ZERO, BigDecimal::add);
-                int totalItemsSold = trendRows.stream().mapToInt(r -> toLong(r[3]).intValue()).sum();
+                                .map(DailySalesTrendRow::revenue).reduce(BigDecimal.ZERO, BigDecimal::add);
+                int totalItemsSold = trendRows.stream().mapToInt(r -> (int) r.itemsSold()).sum();
                 BigDecimal avgOrderValue = totalOrders == 0 ? BigDecimal.ZERO
                                 : totalRevenue.divide(BigDecimal.valueOf(totalOrders), 2, RoundingMode.HALF_UP);
 
-                // ── Status map ────────────────────────────────────────────────────────
+                // Status map
                 Map<String, Integer> byStatus = new LinkedHashMap<>();
                 dashboardRepository.salesOrderCountByStatus(range.start, range.end)
-                                .forEach(r -> byStatus.put((String) r[0], toLong(r[1]).intValue()));
+                                .forEach(r -> byStatus.put(r.status(), (int) r.count()));
 
-                // ── Top products ──────────────────────────────────────────────────────
+                // Top products
                 List<DashboardSalesAnalyticsResponse.TopProductDTO> topProducts = dashboardRepository
                                 .topSellingProducts(range.start, range.end, PageRequest.of(0, TOP_N))
                                 .stream().map(r -> DashboardSalesAnalyticsResponse.TopProductDTO.builder()
-                                                .productId(toLong(r[0]))
-                                                .sku((String) r[1])
-                                                .name((String) r[2])
-                                                .unitsSold(toLong(r[3]).intValue())
-                                                .revenue((BigDecimal) r[4])
+                                                .productId(r.productId()).sku(r.sku()).name(r.name())
+                                                .unitsSold((int) r.unitsSold()).revenue(r.revenue())
                                                 .build())
                                 .toList();
 
-                // ── Top customers ─────────────────────────────────────────────────────
+                // Top customers
                 List<DashboardSalesAnalyticsResponse.TopCustomerDTO> topCustomers = dashboardRepository
                                 .topCustomers(range.start, range.end, PageRequest.of(0, TOP_N))
                                 .stream().map(r -> DashboardSalesAnalyticsResponse.TopCustomerDTO.builder()
-                                                .customerId(toLong(r[0]))
-                                                .customerName((String) r[1])
-                                                .orderCount(toLong(r[2]).intValue())
-                                                .totalSpent((BigDecimal) r[3])
+                                                .customerId(r.customerId()).customerName(r.contactName())
+                                                .orderCount((int) r.orderCount()).totalSpent(r.totalSpent())
                                                 .build())
                                 .toList();
 
-                // ── Daily trend DTOs ──────────────────────────────────────────────────
+                // Daily trend DTOs
                 List<DashboardSalesAnalyticsResponse.DailyTrendDTO> dailyTrend = trendRows.stream()
                                 .map(r -> DashboardSalesAnalyticsResponse.DailyTrendDTO.builder()
-                                                .date((LocalDate) r[0])
-                                                .orders(toLong(r[1]).intValue())
-                                                .revenue((BigDecimal) r[2])
-                                                .itemsSold(toLong(r[3]).intValue())
+                                                .date(r.orderDate()).orders((int) r.orderCount())
+                                                .revenue(r.revenue()).itemsSold((int) r.itemsSold())
                                                 .build())
                                 .toList();
 
-                // ── Period-over-period growth ─────────────────────────────────────────
+                // Period-over-period growth
                 DateRange prev = previous(range);
-                List<Object[]> prevRows = dashboardRepository.dailySalesTrend(prev.start, prev.end);
-                int prevOrders = prevRows.stream().mapToInt(r -> toLong(r[1]).intValue()).sum();
+                List<DailySalesTrendRow> prevRows = dashboardRepository.dailySalesTrend(prev.start, prev.end);
+                int prevOrders = prevRows.stream().mapToInt(r -> (int) r.orderCount()).sum();
                 BigDecimal prevRevenue = prevRows.stream()
-                                .map(r -> (BigDecimal) r[2]).reduce(BigDecimal.ZERO, BigDecimal::add);
+                                .map(DailySalesTrendRow::revenue).reduce(BigDecimal.ZERO, BigDecimal::add);
                 BigDecimal prevAvg = prevOrders == 0 ? BigDecimal.ZERO
                                 : prevRevenue.divide(BigDecimal.valueOf(prevOrders), 2, RoundingMode.HALF_UP);
 
                 return DashboardSalesAnalyticsResponse.builder()
-                                .period(period)
-                                .startDate(range.start)
-                                .endDate(range.end)
+                                .period(period).startDate(range.start).endDate(range.end)
                                 .summary(DashboardSalesAnalyticsResponse.SummaryDTO.builder()
-                                                .totalOrders(totalOrders)
-                                                .totalRevenue(totalRevenue)
-                                                .averageOrderValue(avgOrderValue)
-                                                .totalItemsSold(totalItemsSold)
+                                                .totalOrders(totalOrders).totalRevenue(totalRevenue)
+                                                .averageOrderValue(avgOrderValue).totalItemsSold(totalItemsSold)
                                                 .build())
-                                .byStatus(byStatus)
-                                .topProducts(topProducts)
-                                .topCustomers(topCustomers)
+                                .byStatus(byStatus).topProducts(topProducts).topCustomers(topCustomers)
                                 .dailyTrend(dailyTrend)
                                 .growthMetrics(DashboardSalesAnalyticsResponse.GrowthMetricsDTO.builder()
                                                 .revenueGrowth(growthPercent(prevRevenue, totalRevenue))
-                                                .orderGrowth(growthPercent(BigDecimal.valueOf(prevOrders),
+                                                .orderGrowth(growthPercent(
+                                                                BigDecimal.valueOf(prevOrders),
                                                                 BigDecimal.valueOf(totalOrders)))
                                                 .averageOrderValueGrowth(growthPercent(prevAvg, avgOrderValue))
                                                 .build())
@@ -375,8 +346,6 @@ public class DashboardService {
 
         /**
          * Returns purchase-order performance for the given period.
-         * Includes PO totals, status distribution, top suppliers, category spend, and
-         * monthly trend.
          */
         public DashboardPurchaseAnalyticsResponse getPurchaseAnalytics(
                         DashboardPeriod period, LocalDate startDate, LocalDate endDate) {
@@ -384,108 +353,87 @@ public class DashboardService {
                 DateRange range = resolve(period, startDate, endDate);
                 log.debug("Purchase analytics {} → {}", range.start, range.end);
 
-                // ── Status map (drives totalOrders) ───────────────────────────────────
                 Map<String, Integer> byStatus = new LinkedHashMap<>();
                 dashboardRepository.purchaseOrderCountByStatus(range.start, range.end)
-                                .forEach(r -> byStatus.put((String) r[0], toLong(r[1]).intValue()));
+                                .forEach(r -> byStatus.put(r.status(), (int) r.count()));
 
                 int totalOrders = byStatus.values().stream().mapToInt(Integer::intValue).sum();
                 int totalItemsOrdered = dashboardRepository.totalItemsOrdered(range.start, range.end);
-
                 BigDecimal totalSpent = dashboardRepository.purchaseSpendBetween(range.start, range.end);
                 BigDecimal avgOrderValue = totalOrders == 0 ? BigDecimal.ZERO
                                 : totalSpent.divide(BigDecimal.valueOf(totalOrders), 2, RoundingMode.HALF_UP);
 
-                // ── Top suppliers ─────────────────────────────────────────────────────
                 List<DashboardPurchaseAnalyticsResponse.TopSupplierDTO> topSuppliers = dashboardRepository
                                 .topSuppliers(range.start, range.end, PageRequest.of(0, TOP_N))
                                 .stream().map(r -> DashboardPurchaseAnalyticsResponse.TopSupplierDTO.builder()
-                                                .supplierId(toLong(r[0]))
-                                                .supplierName((String) r[1])
-                                                .orderCount(toLong(r[2]).intValue())
-                                                .totalSpent((BigDecimal) r[3])
-                                                .onTimeDeliveryRate(0.0) // extended via supplier-performance endpoint
+                                                .supplierId(r.supplierId()).supplierName(r.supplierName())
+                                                .orderCount((int) r.orderCount()).totalSpent(r.totalSpent())
+                                                .onTimeDeliveryRate(0.0)
                                                 .build())
                                 .toList();
 
-                // ── Category spending ─────────────────────────────────────────────────
                 List<DashboardPurchaseAnalyticsResponse.CategorySpendingDTO> categorySpending = dashboardRepository
                                 .categorySpending(range.start, range.end)
                                 .stream().map(r -> DashboardPurchaseAnalyticsResponse.CategorySpendingDTO.builder()
-                                                .categoryId(toLong(r[0]))
-                                                .categoryName((String) r[1])
-                                                .totalSpent((BigDecimal) r[2])
-                                                .orderCount(toLong(r[3]).intValue())
+                                                .categoryId(r.categoryId()).categoryName(r.categoryName())
+                                                .totalSpent(r.totalSpent()).orderCount((int) r.orderCount())
                                                 .build())
                                 .toList();
 
-                // ── Monthly trend ─────────────────────────────────────────────────────
                 List<DashboardPurchaseAnalyticsResponse.MonthlyTrendDTO> monthlyTrend = dashboardRepository
                                 .monthlyPurchaseTrend(range.start, range.end)
                                 .stream().map(r -> DashboardPurchaseAnalyticsResponse.MonthlyTrendDTO.builder()
-                                                .month((String) r[0])
-                                                .orders(((Number) r[1]).intValue())
-                                                .totalSpent(new BigDecimal(r[2].toString()))
+                                                .month(r.month()).orders((int) r.orderCount())
+                                                .totalSpent(r.totalSpent())
                                                 .build())
                                 .toList();
 
                 return DashboardPurchaseAnalyticsResponse.builder()
-                                .period(period)
-                                .startDate(range.start)
-                                .endDate(range.end)
+                                .period(period).startDate(range.start).endDate(range.end)
                                 .summary(DashboardPurchaseAnalyticsResponse.SummaryDTO.builder()
-                                                .totalOrders(totalOrders)
-                                                .totalSpent(totalSpent)
-                                                .averageOrderValue(avgOrderValue)
-                                                .totalItemsOrdered(totalItemsOrdered)
+                                                .totalOrders(totalOrders).totalSpent(totalSpent)
+                                                .averageOrderValue(avgOrderValue).totalItemsOrdered(totalItemsOrdered)
                                                 .build())
-                                .byStatus(byStatus)
-                                .topSuppliers(topSuppliers)
-                                .categorySpending(categorySpending)
-                                .monthlyTrend(monthlyTrend)
+                                .byStatus(byStatus).topSuppliers(topSuppliers)
+                                .categorySpending(categorySpending).monthlyTrend(monthlyTrend)
                                 .build();
         }
 
         // ─── 5. Low Stock Alerts ──────────────────────────────────────────────────
 
         /**
-         * Returns every active product at or below its reorder level,
-         * with per-warehouse stock breakdown and CRITICAL / WARNING severity.
+         * Returns every active product at or below its reorder level with per-warehouse
+         * stock breakdown and CRITICAL / WARNING severity.
          */
         public DashboardLowStockAlertsResponse getLowStockAlerts() {
                 log.debug("Building low stock alerts");
 
-                List<Object[]> rows = dashboardRepository.lowStockProductsWithWarehouseBreakdown();
+                List<LowStockWarehouseRow> rows = dashboardRepository.lowStockProductsWithWarehouseBreakdown();
 
-                // Group rows by productId
+                // Group rows by productId using a stable insertion-order map
                 Map<Long, LowStockAgg> aggMap = new LinkedHashMap<>();
-                for (Object[] r : rows) {
-                        Long productId = toLong(r[0]);
-                        LowStockAgg agg = aggMap.computeIfAbsent(productId, id -> {
+                for (LowStockWarehouseRow row : rows) {
+                        LowStockAgg agg = aggMap.computeIfAbsent(row.productId(), id -> {
                                 LowStockAgg a = new LowStockAgg();
                                 a.productId = id;
-                                a.sku = (String) r[1];
-                                a.name = (String) r[2];
-                                a.reorderLevel = ((Number) r[3]).intValue();
-                                a.minStockLevel = ((Number) r[4]).intValue();
+                                a.sku = row.sku();
+                                a.name = row.name();
+                                a.reorderLevel = row.reorderLevel();
+                                a.minStockLevel = row.minStockLevel();
                                 return a;
                         });
-                        int qty = ((Number) r[7]).intValue();
-                        agg.totalStock += qty;
+                        agg.totalStock += row.warehouseQty();
                         agg.warehouses.add(DashboardLowStockAlertsResponse.WarehouseStockDTO.builder()
-                                        .warehouseId(toLong(r[5]))
-                                        .warehouseName((String) r[6])
-                                        .quantity(qty)
+                                        .warehouseId(row.warehouseId())
+                                        .warehouseName(row.warehouseName())
+                                        .quantity(row.warehouseQty())
                                         .build());
                 }
 
                 List<DashboardLowStockAlertsResponse.LowStockProductDTO> products = aggMap.values().stream()
                                 .map(a -> DashboardLowStockAlertsResponse.LowStockProductDTO.builder()
-                                                .productId(a.productId)
-                                                .sku(a.sku)
-                                                .name(a.name)
-                                                .totalStock(a.totalStock)
-                                                .reorderLevel(a.reorderLevel)
+                                                .productId(a.productId).sku(a.sku).name(a.name)
+                                                .totalStock(a.totalStock).reorderLevel(a.reorderLevel)
                                                 .shortage(Math.max(0, a.reorderLevel - a.totalStock))
                                                 .severity(a.totalStock <= a.minStockLevel ? "CRITICAL" : "WARNING")
                                                 .warehouses(a.warehouses)
@@ -496,17 +444,14 @@ public class DashboardService {
                                 .filter(p -> "CRITICAL".equals(p.getSeverity())).count();
 
                 return DashboardLowStockAlertsResponse.builder()
-                                .totalAlerts(products.size())
-                                .criticalAlerts(criticalCount)
-                                .products(products)
+                                .totalAlerts(products.size()).criticalAlerts(criticalCount).products(products)
                                 .build();
         }
 
         // ─── 6. Pending Actions ───────────────────────────────────────────────────
 
         /**
-         * Returns all items requiring immediate attention: PO/adjustment approvals,
-         * overdue invoices, pending shipments, and low-stock count.
+         * Returns all items requiring immediate attention.
          */
         public DashboardPendingActionsResponse getPendingActions() {
                 log.debug("Building pending actions");
@@ -516,69 +461,58 @@ public class DashboardService {
                 int pendingPO = dashboardRepository.countPendingPurchaseOrders();
                 int pendingAdj = dashboardRepository.countPendingStockAdjustments();
 
-                // ── Overdue invoices ───────────────────────────────────────────────────
-                List<Object[]> overdueRows = dashboardRepository.overdueInvoiceDetails(today);
+                List<OverdueInvoiceRow> overdueRows = dashboardRepository.overdueInvoiceDetails(today);
                 BigDecimal overdueTotal = overdueRows.stream()
-                                .map(r -> (BigDecimal) r[2]).reduce(BigDecimal.ZERO, BigDecimal::add);
+                                .map(OverdueInvoiceRow::balanceDue).reduce(BigDecimal.ZERO, BigDecimal::add);
 
-                // ── Pending shipments ─────────────────────────────────────────────────
                 int pendingShipCount = dashboardRepository.countPendingShipments();
-                List<Object[]> oldest = dashboardRepository.oldestPendingShipment(PageRequest.of(0, 1));
+                List<PendingShipmentRow> oldest = dashboardRepository.oldestPendingShipment(PageRequest.of(0, 1));
 
                 DashboardPendingActionsResponse.OldestShipmentDTO oldestShipmentDTO = null;
                 if (!oldest.isEmpty()) {
-                        Object[] sr = oldest.get(0);
-                        LocalDate createdDate = ((LocalDateTime) sr[2]).toLocalDate();
-                        int daysWaiting = (int) ChronoUnit.DAYS.between(createdDate, today);
+                        PendingShipmentRow sr = oldest.get(0);
+                        int daysWaiting = (int) ChronoUnit.DAYS.between(sr.createdAt().toLocalDate(), today);
                         oldestShipmentDTO = DashboardPendingActionsResponse.OldestShipmentDTO.builder()
-                                        .id(toLong(sr[0]))
-                                        .shipmentNumber((String) sr[1])
-                                        .daysWaiting(daysWaiting)
+                                        .id(sr.id()).shipmentNumber(sr.shipmentNumber()).daysWaiting(daysWaiting)
                                         .build();
                 }
 
-                // ── Action item list ──────────────────────────────────────────────────
                 List<DashboardPendingActionsResponse.ActionItemDTO> items = new ArrayList<>();
 
-                // PO approvals (first 5)
-                dashboardRepository.pendingPurchaseOrderApprovals(PageRequest.of(0, 5))
-                                .forEach(r -> items.add(DashboardPendingActionsResponse.ActionItemDTO.builder()
-                                                .type("PURCHASE_ORDER_APPROVAL")
-                                                .id(toLong(r[0]))
-                                                .title("Purchase Order " + r[1] + " awaiting approval")
-                                                .priority("HIGH")
-                                                .amount((BigDecimal) r[2])
-                                                .createdAt((LocalDateTime) r[3])
-                                                .actionUrl("/purchase-orders/" + toLong(r[0]))
-                                                .build()));
+                // PO approvals (first 5) — named record access, no r[n]
+                List<PendingPoApprovalRow> approvals = dashboardRepository
+                                .pendingPurchaseOrderApprovals(PageRequest.of(0, 5));
+                approvals.forEach(r -> items.add(DashboardPendingActionsResponse.ActionItemDTO.builder()
+                                .type("PURCHASE_ORDER_APPROVAL")
+                                .id(r.poId())
+                                .title("Purchase Order " + r.poNumber() + " awaiting approval")
+                                .priority("HIGH")
+                                .amount(r.totalAmount())
+                                .createdAt(r.createdAt())
+                                .actionUrl("/purchase-orders/" + r.poId())
+                                .build()));
 
-                // Overdue invoices (first 5)
-                overdueRows.stream().limit(5)
-                                .forEach(r -> items.add(DashboardPendingActionsResponse.ActionItemDTO.builder()
+                // Overdue invoices (first 5) — named record access, no r[n]
+                overdueRows.stream().limit(5).forEach(r -> items.add(
+                                DashboardPendingActionsResponse.ActionItemDTO.builder()
                                                 .type("OVERDUE_INVOICE")
-                                                .id(toLong(r[0]))
-                                                .title("Invoice " + r[1] + " is overdue")
+                                                .id(r.invoiceId())
+                                                .title("Invoice " + r.invoiceNumber() + " is overdue")
                                                 .priority("CRITICAL")
-                                                .amount((BigDecimal) r[2])
-                                                .customer((String) r[5])
-                                                .createdAt((LocalDateTime) r[6])
-                                                .actionUrl("/invoices/" + toLong(r[0]))
+                                                .amount(r.balanceDue())
+                                                .customer(r.contactName())
+                                                .createdAt(r.createdAt())
+                                                .actionUrl("/invoices/" + r.invoiceId())
                                                 .build()));
 
                 return DashboardPendingActionsResponse.builder()
                                 .pendingApprovals(DashboardPendingActionsResponse.PendingApprovalsDTO.builder()
-                                                .purchaseOrders(pendingPO)
-                                                .stockAdjustments(pendingAdj)
-                                                .total(pendingPO + pendingAdj)
-                                                .build())
+                                                .purchaseOrders(pendingPO).stockAdjustments(pendingAdj)
+                                                .total(pendingPO + pendingAdj).build())
                                 .overdueInvoices(DashboardPendingActionsResponse.OverdueInvoicesDTO.builder()
-                                                .count(overdueRows.size())
-                                                .totalAmount(overdueTotal)
-                                                .build())
+                                                .count(overdueRows.size()).totalAmount(overdueTotal).build())
                                 .pendingShipments(DashboardPendingActionsResponse.PendingShipmentsDTO.builder()
-                                                .count(pendingShipCount)
-                                                .oldestShipment(oldestShipmentDTO)
-                                                .build())
+                                                .count(pendingShipCount).oldestShipment(oldestShipmentDTO).build())
                                 .lowStockAlerts(dashboardRepository.countLowStockProducts())
                                 .items(items)
                                 .build();
@@ -587,8 +521,7 @@ public class DashboardService {
         // ─── 7. Activity Feed ─────────────────────────────────────────────────────
 
         /**
-         * Returns a merged, time-sorted feed of recent system events:
-         * sales order changes, PO status updates, and delivered shipments.
+         * Returns a merged, time-sorted feed of recent system events.
          */
         public DashboardActivityFeedResponse getActivityFeed(int limit) {
                 log.debug("Building activity feed limit={}", limit);
@@ -598,64 +531,55 @@ public class DashboardService {
 
                 List<DashboardActivityFeedResponse.ActivityDTO> all = new ArrayList<>();
 
-                // Sales orders
-                dashboardRepository.recentSalesOrderActivity(p).forEach(r -> {
-                        String status = (String) r[2];
-                        all.add(DashboardActivityFeedResponse.ActivityDTO.builder()
-                                        .id(toLong(r[0]))
-                                        .type(soActivityType(status))
-                                        .title(soActivityTitle(status))
-                                        .description(r[1] + " " + status.toLowerCase() + " by " + r[7])
-                                        .user(DashboardActivityFeedResponse.UserSummaryDTO.builder()
-                                                        .id(toLong(r[6])).username((String) r[7]).build())
-                                        .metadata(DashboardActivityFeedResponse.ActivityMetadataDTO.builder()
-                                                        .orderId(toLong(r[0]))
-                                                        .orderNumber((String) r[1])
-                                                        .customerName((String) r[3])
-                                                        .totalAmount((BigDecimal) r[4])
-                                                        .build())
-                                        .timestamp((LocalDateTime) r[5])
-                                        .build());
-                });
-
-                // Purchase orders
-                dashboardRepository.recentPurchaseOrderActivity(p).forEach(r -> {
-                        String status = (String) r[2];
-                        all.add(DashboardActivityFeedResponse.ActivityDTO.builder()
-                                        .id(toLong(r[0]))
-                                        .type(poActivityType(status))
-                                        .title(poActivityTitle(status))
-                                        .description(r[1] + " " + status.toLowerCase() + " by " + r[7])
-                                        .user(DashboardActivityFeedResponse.UserSummaryDTO.builder()
-                                                        .id(toLong(r[6])).username((String) r[7]).build())
-                                        .metadata(DashboardActivityFeedResponse.ActivityMetadataDTO.builder()
-                                                        .orderId(toLong(r[0]))
-                                                        .orderNumber((String) r[1])
-                                                        .supplierName((String) r[3])
-                                                        .totalAmount((BigDecimal) r[4])
-                                                        .build())
-                                        .timestamp((LocalDateTime) r[5])
-                                        .build());
-                });
-
-                // Deliveries
-                dashboardRepository.recentDeliveries(p)
+                // Sales orders — named record fields
+                dashboardRepository.recentSalesOrderActivity(p)
                                 .forEach(r -> all.add(DashboardActivityFeedResponse.ActivityDTO.builder()
-                                                .id(toLong(r[0]))
-                                                .type("SHIPMENT_DELIVERED")
-                                                .title("Shipment delivered")
-                                                .description("Shipment " + r[1] + " delivered to customer")
+                                                .id(r.soId())
+                                                .type(soActivityType(r.status()))
+                                                .title(soActivityTitle(r.status()))
+                                                .description(r.soNumber() + " " + r.status().toLowerCase() + " by "
+                                                                + r.username())
                                                 .user(DashboardActivityFeedResponse.UserSummaryDTO.builder()
-                                                                .id(toLong(r[4])).username((String) r[5]).build())
+                                                                .id(r.userId()).username(r.username()).build())
                                                 .metadata(DashboardActivityFeedResponse.ActivityMetadataDTO.builder()
-                                                                .shipmentId(toLong(r[0]))
-                                                                .shipmentNumber((String) r[1])
-                                                                .customerName((String) r[2])
-                                                                .build())
-                                                .timestamp((LocalDateTime) r[3])
+                                                                .orderId(r.soId()).orderNumber(r.soNumber())
+                                                                .customerName(r.customerName())
+                                                                .totalAmount(r.totalAmount()).build())
+                                                .timestamp(r.createdAt())
                                                 .build()));
 
-                // Merge, sort newest-first, trim to requested limit
+                // Purchase orders — named record fields
+                dashboardRepository.recentPurchaseOrderActivity(p)
+                                .forEach(r -> all.add(DashboardActivityFeedResponse.ActivityDTO.builder()
+                                                .id(r.poId())
+                                                .type(poActivityType(r.status()))
+                                                .title(poActivityTitle(r.status()))
+                                                .description(r.poNumber() + " " + r.status().toLowerCase() + " by "
+                                                                + r.username())
+                                                .user(DashboardActivityFeedResponse.UserSummaryDTO.builder()
+                                                                .id(r.userId()).username(r.username()).build())
+                                                .metadata(DashboardActivityFeedResponse.ActivityMetadataDTO.builder()
+                                                                .orderId(r.poId()).orderNumber(r.poNumber())
+                                                                .supplierName(r.supplierName())
+                                                                .totalAmount(r.totalAmount()).build())
+                                                .timestamp(r.updatedAt())
+                                                .build()));
+
+                // Deliveries — named record fields
+                dashboardRepository.recentDeliveries(p).forEach(r -> all.add(DashboardActivityFeedResponse.ActivityDTO
+                                .builder()
+                                .id(r.shipmentId())
+                                .type(DashboardActivityType.SHIPMENT_DELIVERED)
+                                .title("Shipment delivered")
+                                .description("Shipment " + r.shipmentNumber() + " delivered to customer")
+                                .user(DashboardActivityFeedResponse.UserSummaryDTO.builder()
+                                                .id(r.userId()).username(r.username()).build())
+                                .metadata(DashboardActivityFeedResponse.ActivityMetadataDTO.builder()
+                                                .shipmentId(r.shipmentId()).shipmentNumber(r.shipmentNumber())
+                                                .customerName(r.customerName()).build())
+                                .timestamp(r.updatedAt())
+                                .build()));
+
                 all.sort((a, b) -> b.getTimestamp().compareTo(a.getTimestamp()));
                 return DashboardActivityFeedResponse.builder()
                                 .activities(all.stream().limit(limit).toList())
@@ -666,43 +590,33 @@ public class DashboardService {
 
         /**
          * Returns per-day inventory value/count snapshots for the requested period.
-         * Uses current snapshot values as a baseline; a full historical reconstruction
-         * would require dedicated snapshot tables (see future enhancements).
          */
         public DashboardInventoryTrendResponse getInventoryTrend(DashboardPeriod period, Long warehouseId) {
                 log.debug("Building inventory trend period={} warehouseId={}", period, warehouseId);
 
                 DateRange range = resolve(period, null, null);
 
-                // Current totals used as approximation baseline
                 BigDecimal currentValue = dashboardRepository.totalInventoryValue();
                 int currentProductCount = dashboardRepository.countActiveProducts();
                 int currentLowStock = dashboardRepository.currentLowStockCount();
 
-                // Generate one data point per calendar day in the range
                 List<DashboardInventoryTrendResponse.DataPointDTO> dataPoints = new ArrayList<>();
                 LocalDate cursor = range.start;
                 while (!cursor.isAfter(range.end)) {
                         dataPoints.add(DashboardInventoryTrendResponse.DataPointDTO.builder()
-                                        .date(cursor)
-                                        .totalValue(currentValue)
-                                        .productCount(currentProductCount)
-                                        .lowStockCount(currentLowStock)
+                                        .date(cursor).totalValue(currentValue)
+                                        .productCount(currentProductCount).lowStockCount(currentLowStock)
                                         .build());
                         cursor = cursor.plusDays(1);
                 }
 
-                return DashboardInventoryTrendResponse.builder()
-                                .period(period)
-                                .dataPoints(dataPoints)
-                                .build();
+                return DashboardInventoryTrendResponse.builder().period(period).dataPoints(dataPoints).build();
         }
 
         // ─── 9. Sales Trend Chart ─────────────────────────────────────────────────
 
         /**
-         * Returns per-day order/revenue data with a period-over-period growth
-         * comparison.
+         * Returns per-day sales data with period-over-period growth comparison.
          */
         public DashboardSalesTrendResponse getSalesTrend(DashboardPeriod period) {
                 log.debug("Building sales trend period={}", period);
@@ -710,33 +624,28 @@ public class DashboardService {
                 DateRange range = resolve(period, null, null);
                 DateRange prev = previous(range);
 
-                List<Object[]> rows = dashboardRepository.dailySalesTrend(range.start, range.end);
+                List<DailySalesTrendRow> rows = dashboardRepository.dailySalesTrend(range.start, range.end);
 
                 List<DashboardSalesTrendResponse.DataPointDTO> dataPoints = rows.stream()
                                 .map(r -> DashboardSalesTrendResponse.DataPointDTO.builder()
-                                                .date((LocalDate) r[0])
-                                                .orders(toLong(r[1]).intValue())
-                                                .revenue((BigDecimal) r[2])
-                                                .itemsSold(toLong(r[3]).intValue())
+                                                .date(r.orderDate()).orders((int) r.orderCount())
+                                                .revenue(r.revenue()).itemsSold((int) r.itemsSold())
                                                 .build())
                                 .toList();
 
-                // Previous period comparison
-                List<Object[]> prevRows = dashboardRepository.dailySalesTrend(prev.start, prev.end);
-                int prevOrders = prevRows.stream().mapToInt(r -> toLong(r[1]).intValue()).sum();
+                List<DailySalesTrendRow> prevRows = dashboardRepository.dailySalesTrend(prev.start, prev.end);
+                int prevOrders = prevRows.stream().mapToInt(r -> (int) r.orderCount()).sum();
                 BigDecimal prevRevenue = prevRows.stream()
-                                .map(r -> (BigDecimal) r[2]).reduce(BigDecimal.ZERO, BigDecimal::add);
-                int curOrders = rows.stream().mapToInt(r -> toLong(r[1]).intValue()).sum();
+                                .map(DailySalesTrendRow::revenue).reduce(BigDecimal.ZERO, BigDecimal::add);
+                int curOrders = rows.stream().mapToInt(r -> (int) r.orderCount()).sum();
                 BigDecimal curRevenue = rows.stream()
-                                .map(r -> (BigDecimal) r[2]).reduce(BigDecimal.ZERO, BigDecimal::add);
+                                .map(DailySalesTrendRow::revenue).reduce(BigDecimal.ZERO, BigDecimal::add);
 
                 return DashboardSalesTrendResponse.builder()
-                                .period(period)
-                                .dataPoints(dataPoints)
+                                .period(period).dataPoints(dataPoints)
                                 .comparison(DashboardSalesTrendResponse.ComparisonDTO.builder()
                                                 .previousPeriod(DashboardSalesTrendResponse.PreviousPeriodDTO.builder()
-                                                                .totalOrders(prevOrders)
-                                                                .totalRevenue(prevRevenue)
+                                                                .totalOrders(prevOrders).totalRevenue(prevRevenue)
                                                                 .build())
                                                 .growth(DashboardSalesTrendResponse.GrowthDTO.builder()
                                                                 .ordersGrowth(growthPercent(
@@ -758,45 +667,34 @@ public class DashboardService {
                 log.debug("Building top selling products period={} limit={}", period, limit);
 
                 DateRange range = resolve(period, null, null);
-                List<Object[]> rows = dashboardRepository.topSellingProducts(
+                List<TopProductRow> rows = dashboardRepository.topSellingProducts(
                                 range.start, range.end, PageRequest.of(0, limit));
 
                 BigDecimal totalRevenue = rows.stream()
-                                .map(r -> (BigDecimal) r[4]).reduce(BigDecimal.ZERO, BigDecimal::add);
+                                .map(TopProductRow::revenue).reduce(BigDecimal.ZERO, BigDecimal::add);
 
                 List<DashboardTopSellingProductsResponse.TopProductDTO> products = rows.stream()
                                 .map(r -> {
-                                        BigDecimal rev = (BigDecimal) r[4];
                                         double pct = totalRevenue.compareTo(BigDecimal.ZERO) == 0 ? 0.0
-                                                        : rev.divide(totalRevenue, 4, RoundingMode.HALF_UP)
+                                                        : r.revenue().divide(totalRevenue, 4, RoundingMode.HALF_UP)
                                                                         .multiply(BigDecimal.valueOf(100))
                                                                         .doubleValue();
                                         return DashboardTopSellingProductsResponse.TopProductDTO.builder()
-                                                        .productId(toLong(r[0]))
-                                                        .sku((String) r[1])
-                                                        .name((String) r[2])
-                                                        .unitsSold(toLong(r[3]).intValue())
-                                                        .revenue(rev)
+                                                        .productId(r.productId()).sku(r.sku()).name(r.name())
+                                                        .unitsSold((int) r.unitsSold()).revenue(r.revenue())
                                                         .percentage(pct)
                                                         .build();
                                 })
                                 .toList();
 
-                return DashboardTopSellingProductsResponse.builder()
-                                .period(period)
-                                .products(products)
-                                .build();
+                return DashboardTopSellingProductsResponse.builder().period(period).products(products).build();
         }
 
         // ─── Private helpers ──────────────────────────────────────────────────────
 
-        /**
-         * Resolves a period enum + optional custom dates into a concrete date range.
-         */
         private DateRange resolve(DashboardPeriod period, LocalDate startDate, LocalDate endDate) {
-                if (startDate != null && endDate != null) {
+                if (startDate != null && endDate != null)
                         return new DateRange(startDate, endDate);
-                }
                 LocalDate today = LocalDate.now();
                 return switch (period == null ? DashboardPeriod.MONTH : period) {
                         case TODAY -> new DateRange(today, today);
@@ -807,26 +705,19 @@ public class DashboardService {
                 };
         }
 
-        /** Returns the equal-length period immediately before the given range. */
         private DateRange previous(DateRange current) {
                 long days = ChronoUnit.DAYS.between(current.start, current.end) + 1;
                 return new DateRange(current.start.minusDays(days), current.start.minusDays(1));
         }
 
-        /** Period-over-period growth percentage; returns 0.0 when previous is zero. */
         private double growthPercent(BigDecimal previous, BigDecimal current) {
                 if (previous == null || previous.compareTo(BigDecimal.ZERO) == 0)
                         return 0.0;
                 return current.subtract(previous)
                                 .divide(previous, 4, RoundingMode.HALF_UP)
-                                .multiply(BigDecimal.valueOf(100))
-                                .doubleValue();
+                                .multiply(BigDecimal.valueOf(100)).doubleValue();
         }
 
-        /**
-         * Safely reads the reorder level for a product from the already-loaded item
-         * list.
-         */
         private int reorderLevelFor(List<InventoryItem> items, Long productId) {
                 return items.stream()
                                 .filter(i -> i.getProduct().getId().equals(productId))
@@ -835,13 +726,9 @@ public class DashboardService {
                                 .orElse(0);
         }
 
-        /** Null-safe Number → Long cast from JPQL COUNT / SUM results. */
-        private Long toLong(Object o) {
-                return o == null ? 0L : ((Number) o).longValue();
-        }
-
-        private String soActivityType(String status) {
-                return "PENDING".equals(status) ? "SALES_ORDER_CREATED" : "SALES_ORDER_UPDATED";
+        private DashboardActivityType soActivityType(String status) {
+                return "PENDING".equals(status) ? DashboardActivityType.SALES_ORDER_CREATED
+                                : DashboardActivityType.SALES_ORDER_UPDATED;
         }
 
         private String soActivityTitle(String status) {
@@ -856,8 +743,9 @@ public class DashboardService {
                 };
         }
 
-        private String poActivityType(String status) {
-                return "APPROVED".equals(status) ? "PURCHASE_ORDER_APPROVED" : "PURCHASE_ORDER_UPDATED";
+        private DashboardActivityType poActivityType(String status) {
+                return "APPROVED".equals(status) ? DashboardActivityType.PURCHASE_ORDER_APPROVED
+                                : DashboardActivityType.PURCHASE_ORDER_UPDATED;
         }
 
         private String poActivityTitle(String status) {
