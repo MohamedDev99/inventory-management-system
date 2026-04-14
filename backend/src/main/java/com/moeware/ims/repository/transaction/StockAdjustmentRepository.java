@@ -50,15 +50,15 @@ public interface StockAdjustmentRepository extends JpaRepository<StockAdjustment
         @Query("SELECT s FROM StockAdjustment s " +
                         "WHERE s.status = :status " +
                         "ORDER BY s.adjustmentDate ASC")
-        List<StockAdjustment> findPendingAdjustments(
-                        @Param("status") StockAdjustmentStatus status);
+        Page<StockAdjustment> findPendingAdjustments(
+                        @Param("status") StockAdjustmentStatus status, Pageable pageable);
 
         /**
          * Convenience overload that finds adjustments in
          * {@link StockAdjustmentStatus#PENDING} status.
          */
-        default List<StockAdjustment> findPendingAdjustments() {
-                return findPendingAdjustments(StockAdjustmentStatus.PENDING);
+        default Page<StockAdjustment> findPendingAdjustments() {
+                return findPendingAdjustments(StockAdjustmentStatus.PENDING, Pageable.unpaged());
         }
 
         /**
@@ -147,22 +147,24 @@ public interface StockAdjustmentRepository extends JpaRepository<StockAdjustment
          *
          * @param sinceDate adjustments on or after this date
          * @param status    the status to filter by
+         * @param pageable
          * @return matching adjustments ordered by adjustmentDate ASC
          */
         @Query("SELECT s FROM StockAdjustment s " +
                         "WHERE s.status = :status " +
                         "AND s.adjustmentDate >= :sinceDate " +
                         "ORDER BY s.adjustmentDate ASC")
-        List<StockAdjustment> findRecentAdjustmentsByStatus(
+        Page<StockAdjustment> findRecentAdjustmentsByStatus(
                         @Param("sinceDate") LocalDateTime sinceDate,
-                        @Param("status") StockAdjustmentStatus status);
+                        @Param("status") StockAdjustmentStatus status,
+                        Pageable pageable);
 
         /**
          * Convenience overload that returns recent
          * {@link StockAdjustmentStatus#PENDING}
          * adjustments — the original {@code findRecentPendingAdjustments} behaviour.
          */
-        default List<StockAdjustment> findRecentPendingAdjustments(LocalDateTime sinceDate) {
-                return findRecentAdjustmentsByStatus(sinceDate, StockAdjustmentStatus.PENDING);
+        default Page<StockAdjustment> findRecentPendingAdjustments(LocalDateTime sinceDate) {
+                return findRecentAdjustmentsByStatus(sinceDate, StockAdjustmentStatus.PENDING, Pageable.unpaged());
         }
 }

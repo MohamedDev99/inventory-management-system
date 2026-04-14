@@ -275,7 +275,9 @@ public class DashboardService {
                 log.debug("Sales analytics {} → {}", range.start, range.end);
 
                 // Daily trend drives summary totals
-                List<DailySalesTrendRow> trendRows = dashboardRepository.dailySalesTrend(range.start, range.end);
+                List<DailySalesTrendRow> trendRows = fillMissingDates(
+                                dashboardRepository.dailySalesTrend(range.start, range.end),
+                                range.start, range.end);
 
                 int totalOrders = trendRows.stream().mapToInt(r -> (int) r.orderCount()).sum();
                 BigDecimal totalRevenue = trendRows.stream()
@@ -317,7 +319,11 @@ public class DashboardService {
 
                 // Period-over-period growth
                 DateRange prev = previous(range);
-                List<DailySalesTrendRow> prevRows = dashboardRepository.dailySalesTrend(prev.start, prev.end);
+
+                List<DailySalesTrendRow> prevRows = fillMissingDates(
+                                dashboardRepository.dailySalesTrend(prev.start, prev.end),
+                                prev.start, prev.end);
+
                 int prevOrders = prevRows.stream().mapToInt(r -> (int) r.orderCount()).sum();
                 BigDecimal prevRevenue = prevRows.stream()
                                 .map(DailySalesTrendRow::revenue).reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -526,8 +532,7 @@ public class DashboardService {
         public DashboardActivityFeedResponse getActivityFeed(int limit) {
                 log.debug("Building activity feed limit={}", limit);
 
-                int perType = Math.max(1, limit / 3);
-                Pageable p = PageRequest.of(0, perType);
+                Pageable p = PageRequest.of(0, limit);
 
                 List<DashboardActivityFeedResponse.ActivityDTO> all = new ArrayList<>();
 
@@ -591,24 +596,97 @@ public class DashboardService {
         /**
          * Returns per-day inventory value/count snapshots for the requested period.
          */
+
+        /**
+         * Returns per-day inventory value/count snapshots for the requested period.
+         * <p>
+         * The current total inventory value is used as the baseline for the last day
+         * in the range. Each prior day's value is back-calculated by subtracting the
+         * net movement that occurred on the following day, walking backwards from
+         * today. This gives a real trend line rather than a flat synthetic series.
+         * <p>
+         * When {@code warehouseId} is supplied, only inventory from that warehouse
+         * contributes to the per-day values.
+         */
         public DashboardInventoryTrendResponse getInventoryTrend(DashboardPeriod period, Long warehouseId) {
                 log.debug("Building inventory trend period={} warehouseId={}", period, warehouseId);
 
                 DateRange range = resolve(period, null, null);
 
-                BigDecimal currentValue = dashboardRepository.totalInventoryValue();
-                int currentProductCount = dashboardRepository.countActiveProducts();
+                // Current snapshot — scoped to warehouse when requested
+                BigDecimal currentValue = warehouseId != null
+                                ? inventoryItemRepository.calculateTotalValueByWarehouse(warehouseId) != null
+                                                ? BigDecimal.valueOf(inventoryItemRepository
+                                                                .calculateTotalValueByWarehouse(warehouseId))
+                                                : BigDecimal.ZERO
+                                : dashboardRepository.totalInventoryValue();
+
+                int currentProductCount = warehouseId != null
+                                ? (int) inventoryItemRepository.findByWarehouse(
+                                                warehouseRepository.getReferenceById(warehouseId),
+                                                Pageable.unpaged()).stream()
+                                                .map(ii -> ii.getProduct().getId()).distinct().count()
+                                : dashboardRepository.countActiveProducts();
+
                 int currentLowStock = dashboardRepository.currentLowStockCount();
 
-                List<DashboardInventoryTrendResponse.DataPointDTO> dataPoints = new ArrayList<>();
+                // Build a date → netChange map from movement records
+                // netChange > 0 means stock went up that day; < 0 means stock went down
+                java.time.LocalDateTime rangeStart = range.start.atStartOfDay();
+                java.time.LocalDateTime rangeEnd = range.end.atTime(23, 59, 59);
+
+                Map<LocalDate, Long> netChangeByDate = new java.util.LinkedHashMap<>();
+                dashboardRepository.dailyInventoryNetChange(rangeStart, rangeEnd)
+                                .forEach(r -> netChangeByDate.put(
+                                                // r[0] is a java.sql.Date from native query — convert safely
+                                                ((java.sql.Date) r[0]).toLocalDate(),
+                                                r[1] == null ? 0L : ((Number) r[1]).longValue()));
+
+                // Build dates list in ascending order
+                List<LocalDate> dates = new ArrayList<>();
                 LocalDate cursor = range.start;
                 while (!cursor.isAfter(range.end)) {
-                        dataPoints.add(DashboardInventoryTrendResponse.DataPointDTO.builder()
-                                        .date(cursor).totalValue(currentValue)
-                                        .productCount(currentProductCount).lowStockCount(currentLowStock)
-                                        .build());
+                        dates.add(cursor);
                         cursor = cursor.plusDays(1);
                 }
+
+                // Walk backwards from currentValue to assign per-day values.
+                // value[today] = currentValue
+                // value[day-1] = value[day] - netChange[day] (undo the change that happened on
+                // "day")
+                Map<LocalDate, BigDecimal> valueByDate = new java.util.LinkedHashMap<>();
+                BigDecimal runningValue = currentValue;
+                for (int i = dates.size() - 1; i >= 0; i--) {
+                        LocalDate date = dates.get(i);
+                        valueByDate.put(date, runningValue);
+                        long netChange = netChangeByDate.getOrDefault(date, 0L);
+                        // Approximate: treat each unit as average unit price to convert quantity to
+                        // value.
+                        // Since we don't have price-history, this is the best approximation without
+                        // dedicated snapshot tables. The sign: going backward means undoing that day's
+                        // net.
+                        BigDecimal avgUnitPrice = currentProductCount > 0 && currentValue.compareTo(BigDecimal.ZERO) > 0
+                                        ? currentValue.divide(
+                                                        BigDecimal.valueOf(Math.max(1,
+                                                                        inventoryItemRepository
+                                                                                        .countTotalInventoryItems())),
+                                                        2, java.math.RoundingMode.HALF_UP)
+                                        : BigDecimal.ZERO;
+                        runningValue = runningValue.subtract(
+                                        avgUnitPrice.multiply(BigDecimal.valueOf(netChange)));
+                        if (runningValue.compareTo(BigDecimal.ZERO) < 0) {
+                                runningValue = BigDecimal.ZERO;
+                        }
+                }
+
+                List<DashboardInventoryTrendResponse.DataPointDTO> dataPoints = dates.stream()
+                                .map(date -> DashboardInventoryTrendResponse.DataPointDTO.builder()
+                                                .date(date)
+                                                .totalValue(valueByDate.getOrDefault(date, BigDecimal.ZERO))
+                                                .productCount(currentProductCount)
+                                                .lowStockCount(currentLowStock)
+                                                .build())
+                                .toList();
 
                 return DashboardInventoryTrendResponse.builder().period(period).dataPoints(dataPoints).build();
         }
@@ -670,8 +748,7 @@ public class DashboardService {
                 List<TopProductRow> rows = dashboardRepository.topSellingProducts(
                                 range.start, range.end, PageRequest.of(0, limit));
 
-                BigDecimal totalRevenue = rows.stream()
-                                .map(TopProductRow::revenue).reduce(BigDecimal.ZERO, BigDecimal::add);
+                BigDecimal totalRevenue = dashboardRepository.revenueBetween(range.start, range.end);
 
                 List<DashboardTopSellingProductsResponse.TopProductDTO> products = rows.stream()
                                 .map(r -> {
@@ -693,8 +770,16 @@ public class DashboardService {
         // ─── Private helpers ──────────────────────────────────────────────────────
 
         private DateRange resolve(DashboardPeriod period, LocalDate startDate, LocalDate endDate) {
-                if (startDate != null && endDate != null)
+                // if ((startDate == null) != (endDate == null)) {
+                // throw new IllegalArgumentException("startDate and endDate must be provided
+                // together");
+                // }
+                if (startDate != null && endDate != null) {
+                        if (startDate.isAfter(endDate)) {
+                                throw new IllegalArgumentException("startDate must be on or before endDate");
+                        }
                         return new DateRange(startDate, endDate);
+                }
                 LocalDate today = LocalDate.now();
                 return switch (period == null ? DashboardPeriod.MONTH : period) {
                         case TODAY -> new DateRange(today, today);
@@ -703,6 +788,35 @@ public class DashboardService {
                         case QUARTER -> new DateRange(today.minusMonths(3).withDayOfMonth(1), today);
                         case YEAR -> new DateRange(today.withDayOfYear(1), today);
                 };
+        }
+
+        /**
+         * Fills the full [start, end] calendar range with {@link DailySalesTrendRow}s,
+         * inserting zero-valued rows for dates that had no sales orders.
+         * <p>
+         * Without this, chart consumers receive a sparse list and must infer missing
+         * dates themselves — leading to rendering gaps or incorrect interpolation.
+         *
+         * @param dbRows sparse rows returned by the repository (only dates with orders)
+         * @param start  inclusive range start
+         * @param end    inclusive range end
+         * @return dense list with one entry per calendar day, zero-filled where needed
+         */
+        private List<DailySalesTrendRow> fillMissingDates(List<DailySalesTrendRow> dbRows, LocalDate start,
+                        LocalDate end) {
+
+                // Index DB rows by date for O(1) lookup
+                Map<LocalDate, DailySalesTrendRow> rowByDate = dbRows.stream()
+                                .collect(Collectors.toMap(DailySalesTrendRow::orderDate, r -> r));
+
+                List<DailySalesTrendRow> dense = new ArrayList<>();
+                LocalDate cursor = start;
+                while (!cursor.isAfter(end)) {
+                        dense.add(rowByDate.getOrDefault(cursor,
+                                        new DailySalesTrendRow(cursor, 0L, BigDecimal.ZERO, 0L)));
+                        cursor = cursor.plusDays(1);
+                }
+                return dense;
         }
 
         private DateRange previous(DateRange current) {

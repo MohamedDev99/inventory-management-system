@@ -91,7 +91,7 @@ public class StockAdjustmentService {
          *                                        stock negative
          * @throws UserNotFoundException          if the performing user does not exist
          */
-        public StockAdjustmentResponse createAdjustment(StockAdjustmentRequest request) {
+        public StockAdjustmentResponse createAdjustment(StockAdjustmentRequest request, Authentication authentication) {
                 log.info("Creating stock adjustment - product={}, warehouse={}, change={}",
                                 request.getProductId(), request.getWarehouseId(), request.getQuantityChange());
 
@@ -101,8 +101,10 @@ public class StockAdjustmentService {
                 Warehouse warehouse = warehouseRepository.findById(request.getWarehouseId())
                                 .orElseThrow(() -> new WarehouseNotFoundException(request.getWarehouseId()));
 
-                User performedBy = userRepository.findById(request.getPerformedBy())
-                                .orElseThrow(() -> new UserNotFoundException(request.getPerformedBy()));
+                // REPLACE WITH THIS:
+                String username = authentication.getName();
+                User performedBy = userRepository.findByUsername(username)
+                                .orElseThrow(() -> new UserNotFoundException(username));
 
                 InventoryItem inventory = inventoryItemRepository.findByProductAndWarehouse(product, warehouse)
                                 .orElseThrow(
@@ -232,6 +234,7 @@ public class StockAdjustmentService {
          *                                                  negative stock
          * @throws UserNotFoundException                    if approver not found
          */
+        @Transactional
         public StockAdjustmentResponse approveAdjustment(Long id, StockAdjustmentApproveRequest request,
                         Authentication authentication) {
                 log.info("Approving stock adjustment id={} by actor={}", id, authentication.getName());
@@ -269,7 +272,14 @@ public class StockAdjustmentService {
                 boolean isAdmin = authentication.getAuthorities().stream()
                                 .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
 
-                if (!isAdmin && currentStock > 0) {
+                // REPLACE WITH THIS:
+                if (!isAdmin) {
+                        if (currentStock == 0) {
+                                // Any non-zero adjustment on empty stock is by definition > 10% — require ADMIN
+                                throw new StockAdjustmentException(
+                                                "Adjustment on zero-stock item requires ADMIN approval " +
+                                                                "as the percentage impact cannot be bounded.");
+                        }
                         double changePercent = (Math.abs(adjustment.getQuantityChange()) / (double) currentStock)
                                         * 100.0;
                         if (changePercent > 10.0) {

@@ -147,13 +147,15 @@ public class StockAdjustmentController {
         @PostMapping
         @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'WAREHOUSE_STAFF')")
         public ResponseEntity<ApiResponseWpp<StockAdjustmentResponse>> createAdjustment(
-                        @Valid @RequestBody StockAdjustmentRequest request) {
+                        @Valid @RequestBody StockAdjustmentRequest request,
+                        Authentication authentication) {
 
-                log.info("POST /api/stock-adjustments - product={}, warehouse={}, change={}",
-                                request.getProductId(), request.getWarehouseId(), request.getQuantityChange());
+                log.info("POST /api/stock-adjustments - product={}, warehouse={}, change={}, actor={}",
+                                request.getProductId(), request.getWarehouseId(), request.getQuantityChange(),
+                                authentication.getName());
 
                 return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponseWpp.success(
-                                stockAdjustmentService.createAdjustment(request),
+                                stockAdjustmentService.createAdjustment(request, authentication),
                                 "Stock adjustment created successfully"));
         }
 
@@ -174,7 +176,7 @@ public class StockAdjustmentController {
                         @Valid @RequestBody StockAdjustmentApproveRequest request,
                         Authentication authentication) {
 
-                log.info("PATCH /api/v1/stock-adjustments/{}/approve - actor={}", id, authentication.getName());
+                log.info("PATCH /api/stock-adjustments/{}/approve - actor={}", id, authentication.getName());
                 return ResponseEntity.ok(ApiResponseWpp.success(
                                 stockAdjustmentService.approveAdjustment(id, request, authentication),
                                 "Stock adjustment approved successfully"));
@@ -197,7 +199,7 @@ public class StockAdjustmentController {
                         @Valid @RequestBody StockAdjustmentRejectRequest request,
                         Authentication authentication) {
 
-                log.info("PATCH /api/v1/stock-adjustments/{}/reject - actor={}", id, authentication.getName());
+                log.info("PATCH /api/stock-adjustments/{}/reject - actor={}", id, authentication.getName());
                 return ResponseEntity.ok(ApiResponseWpp.success(
                                 stockAdjustmentService.rejectAdjustment(id, request, authentication),
                                 "Stock adjustment rejected successfully"));

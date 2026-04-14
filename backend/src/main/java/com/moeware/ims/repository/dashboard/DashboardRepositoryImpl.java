@@ -5,6 +5,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Repository;
 import com.moeware.ims.enums.transaction.PurchaseOrderStatus;
 import com.moeware.ims.enums.transaction.SalesOrderStatus;
 import com.moeware.ims.enums.transaction.ShipmentStatus;
+import com.moeware.ims.enums.transaction.StockAdjustmentStatus;
 import com.moeware.ims.repository.UserRepository;
 import com.moeware.ims.repository.inventory.InventoryItemRepository;
 import com.moeware.ims.repository.inventory.ProductRepository;
@@ -99,7 +101,7 @@ public class DashboardRepositoryImpl implements DashboardRepository {
 
     /**
      * Aggregation query – no domain-repo equivalent.
-     * Sums (unitPrice × quantity) across all active products.
+     * Sums (unitPrice × quantity) across all active products.getTotalElements
      */
     @Override
     public BigDecimal totalInventoryValue() {
@@ -137,49 +139,41 @@ public class DashboardRepositoryImpl implements DashboardRepository {
     // ═══════════════════════════════════════════════════════════════════════════
 
     /**
-     * Delegates to {@link SalesOrderRepository#findAllWithFilters} with
-     * {@link SalesOrderStatus#PENDING}.
+     * Delegates to {@link SalesOrderRepository#countByStatus(SalesOrderStatus)}.
+     * Spring Data derived COUNT — no page fetch, no entity loading.
      */
     @Override
     public int countPendingSalesOrders() {
-        return (int) salesOrderRepository
-                .findAllWithFilters(null, null, null,
-                        SalesOrderStatus.PENDING, null, null, null, Pageable.unpaged())
-                .getTotalElements();
+        return (int) salesOrderRepository.countByStatus(SalesOrderStatus.PENDING);
     }
 
     /**
-     * Delegates to {@link SalesOrderRepository#findAllWithFilters} with
-     * {@link SalesOrderStatus#CONFIRMED}.
+     * Delegates to {@link SalesOrderRepository#countByStatus(SalesOrderStatus)}.
+     * Spring Data derived COUNT — no page fetch, no entity loading.
      */
     @Override
     public int countConfirmedSalesOrders() {
-        return (int) salesOrderRepository
-                .findAllWithFilters(null, null, null,
-                        SalesOrderStatus.CONFIRMED, null, null, null, Pageable.unpaged())
-                .getTotalElements();
+        return (int) salesOrderRepository.countByStatus(SalesOrderStatus.CONFIRMED);
     }
 
     /**
-     * Delegates to {@link PurchaseOrderRepository#findByStatus} with
-     * {@link PurchaseOrderStatus#SUBMITTED}.
+     * Delegates to
+     * {@link PurchaseOrderRepository#countByStatus(PurchaseOrderStatus)}.
+     * Spring Data derived COUNT — no page fetch, no entity loading.
      */
     @Override
     public int countPendingPurchaseOrders() {
-        return (int) purchaseOrderRepository
-                .findByStatus(PurchaseOrderStatus.SUBMITTED, Pageable.unpaged())
-                .getTotalElements();
+        return (int) purchaseOrderRepository.countByStatus(PurchaseOrderStatus.SUBMITTED);
     }
 
     /**
-     * Delegates to {@link PurchaseOrderRepository#findByStatus} with
-     * {@link PurchaseOrderStatus#APPROVED}.
+     * Delegates to
+     * {@link PurchaseOrderRepository#countByStatus(PurchaseOrderStatus)}.
+     * Spring Data derived COUNT — no page fetch, no entity loading.
      */
     @Override
     public int countApprovedPurchaseOrders() {
-        return (int) purchaseOrderRepository
-                .findByStatus(PurchaseOrderStatus.APPROVED, Pageable.unpaged())
-                .getTotalElements();
+        return (int) purchaseOrderRepository.countByStatus(PurchaseOrderStatus.APPROVED);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -213,15 +207,14 @@ public class DashboardRepositoryImpl implements DashboardRepository {
     }
 
     /**
-     * Delegates to {@link PurchaseOrderRepository#findAllWithFilters} scoped to
-     * {@link PurchaseOrderStatus#RECEIVED} on today's date.
+     * Delegates to
+     * {@link PurchaseOrderRepository#countByStatusAndActualDeliveryDate(PurchaseOrderStatus, LocalDate)}.
+     * Spring Data derived COUNT — no page fetch, no entity loading.
      */
     @Override
     public int countPurchaseOrdersReceivedToday(LocalDate today) {
         return (int) purchaseOrderRepository
-                .findAllWithFilters(null, null, null,
-                        PurchaseOrderStatus.RECEIVED, null, today, today, Pageable.unpaged())
-                .getTotalElements();
+                .countByStatusAndActualDeliveryDate(PurchaseOrderStatus.RECEIVED, today);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -319,16 +312,17 @@ public class DashboardRepositoryImpl implements DashboardRepository {
     // SALES ANALYTICS – aggregation, typed projection records
     // ═══════════════════════════════════════════════════════════════════════════
 
+    // In DashboardRepositoryImpl — replace the dailySalesTrend method
+
     @Override
     @SuppressWarnings("unchecked")
     public List<DailySalesTrendRow> dailySalesTrend(LocalDate start, LocalDate end) {
-        return em.createQuery("""
+        // Query 1: order count and revenue — no join to items, so no row multiplication
+        List<Object[]> orderRows = em.createQuery("""
                 SELECT so.orderDate,
                        COUNT(so),
-                       COALESCE(SUM(so.totalAmount), 0),
-                       COALESCE(SUM(soi.quantity), 0)
+                       COALESCE(SUM(so.totalAmount), 0)
                 FROM SalesOrder so
-                LEFT JOIN so.items soi
                 WHERE so.status != :cancelled
                 AND so.orderDate BETWEEN :start AND :end
                 GROUP BY so.orderDate
@@ -337,15 +331,38 @@ public class DashboardRepositoryImpl implements DashboardRepository {
                 .setParameter("cancelled", SalesOrderStatus.CANCELLED)
                 .setParameter("start", start)
                 .setParameter("end", end)
-                .getResultList()
-                .stream()
-                .map(row -> {
-                    Object[] r = (Object[]) row;
+                .getResultList();
+
+        // Query 2: items sold — joined to items, grouped by date
+        List<Object[]> itemRows = em.createQuery("""
+                SELECT soi.salesOrder.orderDate,
+                       COALESCE(SUM(soi.quantity), 0)
+                FROM SalesOrderItem soi
+                JOIN soi.salesOrder so
+                WHERE so.status != :cancelled
+                AND so.orderDate BETWEEN :start AND :end
+                GROUP BY soi.salesOrder.orderDate
+                """)
+                .setParameter("cancelled", SalesOrderStatus.CANCELLED)
+                .setParameter("start", start)
+                .setParameter("end", end)
+                .getResultList();
+
+        // Build a date → itemsSold lookup map from query 2
+        Map<LocalDate, Long> itemsByDate = itemRows.stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        r -> (LocalDate) r[0],
+                        r -> toLong(r[1])));
+
+        // Merge: order count + revenue from query 1, items sold from the map
+        return orderRows.stream()
+                .map(r -> {
+                    LocalDate date = (LocalDate) r[0];
                     return new DailySalesTrendRow(
-                            (LocalDate) r[0],
+                            date,
                             toLong(r[1]),
                             (BigDecimal) r[2],
-                            toLong(r[3]));
+                            itemsByDate.getOrDefault(date, 0L));
                 })
                 .toList();
     }
@@ -719,6 +736,7 @@ public class DashboardRepositoryImpl implements DashboardRepository {
         return shipmentRepository.findPendingShipments()
                 .stream()
                 .sorted(Comparator.comparing(sh -> sh.getCreatedAt()))
+                .skip(pageable.getOffset())
                 .limit(pageable.getPageSize())
                 .map(sh -> new PendingShipmentRow(
                         sh.getId(),
@@ -728,14 +746,12 @@ public class DashboardRepositoryImpl implements DashboardRepository {
     }
 
     /**
-     * Delegates to {@link ShipmentRepository#findByStatus} with
-     * {@link ShipmentStatus#PENDING}.
+     * Delegates to {@link ShipmentRepository#countByStatus(ShipmentStatus)}.
+     * Spring Data derived COUNT — no page fetch, no entity loading.
      */
     @Override
     public int countPendingShipments() {
-        return (int) shipmentRepository
-                .findByStatus(ShipmentStatus.PENDING, Pageable.unpaged())
-                .getTotalElements();
+        return (int) shipmentRepository.countByStatus(ShipmentStatus.PENDING);
     }
 
     /**

@@ -7,6 +7,7 @@ import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -123,7 +124,8 @@ public class InventoryService {
         /**
          * Transfer stock between warehouses
          */
-        public TransferInventoryResponse transferInventory(TransferInventoryRequest request) {
+        public TransferInventoryResponse transferInventory(TransferInventoryRequest request,
+                        Authentication authentication) {
                 log.info("Transferring {} units of product {} from warehouse {} to warehouse {}",
                                 request.getQuantity(), request.getProductId(), request.getFromWarehouseId(),
                                 request.getToWarehouseId());
@@ -145,9 +147,10 @@ public class InventoryService {
                 Warehouse toWarehouse = warehouseRepository.findById(request.getToWarehouseId())
                                 .orElseThrow(() -> new WarehouseNotFoundException(request.getFromWarehouseId()));
 
-                User performedBy = userRepository.findById(request.getPerformedBy())
-                                .orElseThrow(
-                                                () -> new UserNotFoundException(request.getPerformedBy()));
+                // REPLACE WITH THIS:
+                String username = authentication.getName();
+                User performedBy = userRepository.findByUsername(username)
+                                .orElseThrow(() -> new UserNotFoundException(username));
 
                 // Get or create inventory items
                 InventoryItem fromInventory = inventoryItemRepository.findByProductAndWarehouse(product, fromWarehouse)
@@ -214,7 +217,8 @@ public class InventoryService {
         /**
          * Create stock adjustment request
          */
-        public StockAdjustmentResponse createStockAdjustment(StockAdjustmentRequest request) {
+        public StockAdjustmentResponse createStockAdjustment(StockAdjustmentRequest request,
+                        Authentication authentication) {
                 log.info("Creating stock adjustment for product {} in warehouse {}",
                                 request.getProductId(), request.getWarehouseId());
 
@@ -226,9 +230,10 @@ public class InventoryService {
                 Warehouse warehouse = warehouseRepository.findById(request.getWarehouseId())
                                 .orElseThrow(() -> new WarehouseNotFoundException(request.getWarehouseId()));
 
-                User performedBy = userRepository.findById(request.getPerformedBy())
-                                .orElseThrow(
-                                                () -> new UserNotFoundException(request.getPerformedBy()));
+                // REPLACE WITH THIS:
+                String username = authentication.getName();
+                User performedBy = userRepository.findByUsername(username)
+                                .orElseThrow(() -> new UserNotFoundException(username));
 
                 // Get current inventory
                 InventoryItem inventory = inventoryItemRepository.findByProductAndWarehouse(product, warehouse)

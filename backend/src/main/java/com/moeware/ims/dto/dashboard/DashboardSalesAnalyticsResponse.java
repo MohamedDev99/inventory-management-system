@@ -26,7 +26,7 @@ import lombok.NoArgsConstructor;
         "daily trend data, and period-over-period growth metrics")
 public class DashboardSalesAnalyticsResponse {
 
-    @Schema(description = "The resolved time window (matches the period request parameter or CUSTOM when explicit dates are used)", example = "MONTH")
+    @Schema(description = "The resolved time window (matches the period request parameter)", example = "MONTH")
     private DashboardPeriod period;
 
     @Schema(description = "Inclusive start date of the analytics window", example = "2026-02-01")

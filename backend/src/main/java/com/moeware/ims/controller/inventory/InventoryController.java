@@ -11,6 +11,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -171,11 +172,12 @@ public class InventoryController {
         @PostMapping("/transfer")
         @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'WAREHOUSE_STAFF')")
         public ResponseEntity<ApiResponseWpp<TransferInventoryResponse>> transferInventory(
-                        @Parameter(description = "Transfer request details", required = true) @Valid @RequestBody TransferInventoryRequest request) {
+                        @Parameter(description = "Transfer request details", required = true) @Valid @RequestBody TransferInventoryRequest request,
+                        Authentication authentication) {
 
                 log.info("POST /api/inventory/transfer - Transferring inventory");
 
-                TransferInventoryResponse result = inventoryService.transferInventory(request);
+                TransferInventoryResponse result = inventoryService.transferInventory(request, authentication);
 
                 return ResponseEntity.ok(
                                 ApiResponseWpp.success(result, "Inventory transferred successfully"));
@@ -195,11 +197,12 @@ public class InventoryController {
         @PostMapping("/adjust")
         @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'WAREHOUSE_STAFF')")
         public ResponseEntity<ApiResponseWpp<StockAdjustmentResponse>> createStockAdjustment(
-                        @Parameter(description = "Stock adjustment request details", required = true) @Valid @RequestBody StockAdjustmentRequest request) {
+                        @Parameter(description = "Stock adjustment request details", required = true) @Valid @RequestBody StockAdjustmentRequest request,
+                        Authentication authentication) {
 
                 log.info("POST /api/inventory/adjust - Creating stock adjustment");
 
-                StockAdjustmentResponse result = inventoryService.createStockAdjustment(request);
+                StockAdjustmentResponse result = inventoryService.createStockAdjustment(request, authentication);
 
                 return ResponseEntity.status(HttpStatus.CREATED).body(
                                 ApiResponseWpp.success(result, "Stock adjustment created successfully"));

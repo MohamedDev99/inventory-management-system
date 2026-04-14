@@ -116,7 +116,7 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
                         "(:startDate IS NULL OR i.invoiceDate >= :startDate) AND " +
                         "(:endDate IS NULL OR i.invoiceDate <= :endDate) AND " +
                         "(:dueDate IS NULL OR i.dueDate <= :dueDate) AND " +
-                        "(:overdue IS NULL OR (:overdue = true AND i.invoiceStatus NOT IN :overdueExcluded AND i.dueDate < CURRENT_DATE))")
+                        "(:overdue IS NULL OR :overdue = false OR (:overdue = true AND i.invoiceStatus NOT IN :overdueExcluded AND i.dueDate < CURRENT_DATE))")
         Page<Invoice> findAllWithFilters(
                         @Param("search") String search,
                         @Param("customerId") Long customerId,

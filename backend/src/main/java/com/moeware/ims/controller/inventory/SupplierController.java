@@ -186,7 +186,7 @@ public class SupplierController {
         @PatchMapping("/{id}")
         public ResponseEntity<ApiResponseWpp<SupplierResponse>> patchSupplier(
                         @Parameter(description = "Supplier ID", required = true) @PathVariable Long id,
-                        @Parameter(description = "Partial supplier data", required = true) @RequestBody SupplierPatchRequest supplierPatchRequest) {
+                        @Parameter(description = "Partial supplier data", required = true) @Valid @RequestBody SupplierPatchRequest supplierPatchRequest) {
 
                 log.info("PATCH /api/suppliers/{} - Partially updating supplier", id);
 
