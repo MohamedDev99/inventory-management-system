@@ -23,106 +23,114 @@ import com.moeware.ims.enums.transaction.ShipmentStatus;
 @Repository
 public interface ShipmentRepository extends JpaRepository<Shipment, Long> {
 
-    /**
-     * Find shipment by unique shipment number
-     */
-    Optional<Shipment> findByShipmentNumber(String shipmentNumber);
+        /**
+         * Find shipment by unique shipment number
+         */
+        Optional<Shipment> findByShipmentNumber(String shipmentNumber);
 
-    /**
-     * Find shipment by tracking number
-     */
-    Optional<Shipment> findByTrackingNumber(String trackingNumber);
+        /**
+         * Find shipment by tracking number
+         */
+        Optional<Shipment> findByTrackingNumber(String trackingNumber);
 
-    /**
-     * Find all shipments for a specific sales order
-     */
-    Page<Shipment> findBySalesOrder(SalesOrder salesOrder, Pageable pageable);
+        /**
+         * Find all shipments for a specific sales order
+         */
+        Page<Shipment> findBySalesOrder(SalesOrder salesOrder, Pageable pageable);
 
-    /**
-     * Find shipments by status
-     */
-    Page<Shipment> findByStatus(ShipmentStatus status, Pageable pageable);
+        /**
+         * Find shipments by status
+         */
+        Page<Shipment> findByStatus(ShipmentStatus status, Pageable pageable);
 
-    /**
-     * Find all shipments from a specific warehouse
-     */
-    Page<Shipment> findByShippedFromWarehouse(Warehouse warehouse, Pageable pageable);
+        /**
+         * Find all shipments from a specific warehouse
+         */
+        Page<Shipment> findByShippedFromWarehouse(Warehouse warehouse, Pageable pageable);
 
-    /**
-     * Find shipments by carrier
-     */
-    Page<Shipment> findByCarrier(String carrier, Pageable pageable);
+        /**
+         * Find shipments by carrier
+         */
+        Page<Shipment> findByCarrier(String carrier, Pageable pageable);
 
-    /**
-     * Find shipments with estimated delivery date in range
-     */
-    @Query("SELECT s FROM Shipment s WHERE s.estimatedDeliveryDate BETWEEN :startDate AND :endDate")
-    Page<Shipment> findByEstimatedDeliveryDateBetween(
-            @Param("startDate") LocalDate startDate,
-            @Param("endDate") LocalDate endDate,
-            Pageable pageable);
+        /**
+         * Find shipments with estimated delivery date in range
+         */
+        @Query("SELECT s FROM Shipment s WHERE s.estimatedDeliveryDate BETWEEN :startDate AND :endDate")
+        Page<Shipment> findByEstimatedDeliveryDateBetween(
+                        @Param("startDate") LocalDate startDate,
+                        @Param("endDate") LocalDate endDate,
+                        Pageable pageable);
 
-    /**
-     * Find shipments with actual delivery date in range
-     */
-    @Query("SELECT s FROM Shipment s WHERE s.actualDeliveryDate BETWEEN :startDate AND :endDate")
-    Page<Shipment> findByActualDeliveryDateBetween(
-            @Param("startDate") LocalDate startDate,
-            @Param("endDate") LocalDate endDate,
-            Pageable pageable);
+        /**
+         * Find shipments with actual delivery date in range
+         */
+        @Query("SELECT s FROM Shipment s WHERE s.actualDeliveryDate BETWEEN :startDate AND :endDate")
+        Page<Shipment> findByActualDeliveryDateBetween(
+                        @Param("startDate") LocalDate startDate,
+                        @Param("endDate") LocalDate endDate,
+                        Pageable pageable);
 
-    /**
-     * Find all pending shipments (not yet delivered)
-     */
-    @Query("SELECT s FROM Shipment s WHERE s.status IN ('PENDING', 'IN_TRANSIT')")
-    List<Shipment> findPendingShipments();
+        /**
+         * Find all pending shipments (not yet delivered)
+         */
+        @Query("SELECT s FROM Shipment s WHERE s.status IN ('PENDING', 'IN_TRANSIT')")
+        List<Shipment> findPendingShipments();
 
-    /**
-     * Find overdue shipments (past estimated delivery date and not delivered)
-     */
-    @Query("SELECT s FROM Shipment s WHERE s.status NOT IN ('DELIVERED', 'RETURNED', 'FAILED') " +
-            "AND s.estimatedDeliveryDate < :currentDate")
-    List<Shipment> findOverdueShipments(@Param("currentDate") LocalDate currentDate);
+        /**
+         * Find overdue shipments (past estimated delivery date and not delivered)
+         */
+        @Query("SELECT s FROM Shipment s WHERE s.status NOT IN ('DELIVERED', 'RETURNED', 'FAILED') " +
+                        "AND s.estimatedDeliveryDate < :currentDate")
+        List<Shipment> findOverdueShipments(@Param("currentDate") LocalDate currentDate);
 
-    /**
-     * Find shipments with filters
-     */
-    @Query("SELECT s FROM Shipment s WHERE " +
-            "(:warehouseId IS NULL OR s.shippedFromWarehouse.id = :warehouseId) AND " +
-            "(:status IS NULL OR s.status = :status) AND " +
-            "(:carrier IS NULL OR LOWER(s.carrier) LIKE LOWER(CONCAT('%', :carrier, '%')))")
-    Page<Shipment> findAllWithFilters(
-            @Param("warehouseId") Long warehouseId,
-            @Param("status") ShipmentStatus status,
-            @Param("carrier") String carrier,
-            Pageable pageable);
+        /**
+         * Find shipments with filters
+         */
+        @Query("SELECT s FROM Shipment s WHERE " +
+                        "(:warehouseId IS NULL OR s.shippedFromWarehouse.id = :warehouseId) AND " +
+                        "(:status IS NULL OR s.status = :status) AND " +
+                        "(:carrier IS NULL OR LOWER(s.carrier) LIKE LOWER(CONCAT('%', :carrier, '%')))")
+        Page<Shipment> findAllWithFilters(
+                        @Param("warehouseId") Long warehouseId,
+                        @Param("status") ShipmentStatus status,
+                        @Param("carrier") String carrier,
+                        Pageable pageable);
 
-    /**
-     * Count shipments by status
-     */
-    @Query("SELECT s.status, COUNT(s) FROM Shipment s GROUP BY s.status")
-    List<Object[]> countByStatus();
+        /**
+         * Count shipments by status
+         */
+        @Query("SELECT s.status, COUNT(s) FROM Shipment s GROUP BY s.status")
+        List<Object[]> countByStatus();
 
-    /**
-     * Get shipment statistics for a warehouse
-     */
-    @Query("SELECT COUNT(s), AVG(s.shippingCost), SUM(s.weight) " +
-            "FROM Shipment s WHERE s.shippedFromWarehouse.id = :warehouseId")
-    List<Object[]> getWarehouseShipmentStats(@Param("warehouseId") Long warehouseId);
+        // Add to ShipmentRepository
 
-    /**
-     * Check if shipment number already exists
-     */
-    boolean existsByShipmentNumber(String shipmentNumber);
+        /**
+         * Count shipments by status.
+         * Spring Data derives SELECT COUNT(*) WHERE status = ? — no JPQL needed.
+         */
+        long countByStatus(ShipmentStatus status);
 
-    /**
-     * Check if tracking number already exists
-     */
-    boolean existsByTrackingNumber(String trackingNumber);
+        /**
+         * Get shipment statistics for a warehouse
+         */
+        @Query("SELECT COUNT(s), AVG(s.shippingCost), SUM(s.weight) " +
+                        "FROM Shipment s WHERE s.shippedFromWarehouse.id = :warehouseId")
+        List<Object[]> getWarehouseShipmentStats(@Param("warehouseId") Long warehouseId);
 
-    /**
-     * Find shipments by sales order ID
-     */
-    @Query("SELECT s FROM Shipment s WHERE s.salesOrder.id = :salesOrderId")
-    List<Shipment> findBySalesOrderId(@Param("salesOrderId") Long salesOrderId);
+        /**
+         * Check if shipment number already exists
+         */
+        boolean existsByShipmentNumber(String shipmentNumber);
+
+        /**
+         * Check if tracking number already exists
+         */
+        boolean existsByTrackingNumber(String trackingNumber);
+
+        /**
+         * Find shipments by sales order ID
+         */
+        @Query("SELECT s FROM Shipment s WHERE s.salesOrder.id = :salesOrderId")
+        List<Shipment> findBySalesOrderId(@Param("salesOrderId") Long salesOrderId);
 }

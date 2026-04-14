@@ -19,53 +19,61 @@ import com.moeware.ims.enums.transaction.SalesOrderStatus;
 @Repository
 public interface SalesOrderRepository extends JpaRepository<SalesOrder, Long> {
 
-    Optional<SalesOrder> findBySoNumber(String soNumber);
+        Optional<SalesOrder> findBySoNumber(String soNumber);
 
-    boolean existsBySoNumber(String soNumber);
+        boolean existsBySoNumber(String soNumber);
 
-    /**
-     * Find all sales orders with optional filters and pagination
-     */
-    @Query("""
-            SELECT so FROM SalesOrder so
-            WHERE (:search IS NULL OR so.soNumber LIKE %:search% OR so.customerName LIKE %:search%)
-            AND (:customerId IS NULL OR so.customer.id = :customerId)
-            AND (:warehouseId IS NULL OR so.warehouse.id = :warehouseId)
-            AND (:status IS NULL OR so.status = :status)
-            AND (:createdByUserId IS NULL OR so.createdByUser.id = :createdByUserId)
-            AND (:startDate IS NULL OR so.orderDate >= :startDate)
-            AND (:endDate IS NULL OR so.orderDate <= :endDate)
-            """)
-    Page<SalesOrder> findAllWithFilters(
-            @Param("search") String search,
-            @Param("customerId") Long customerId,
-            @Param("warehouseId") Long warehouseId,
-            @Param("status") SalesOrderStatus status,
-            @Param("createdByUserId") Long createdByUserId,
-            @Param("startDate") LocalDate startDate,
-            @Param("endDate") LocalDate endDate,
-            Pageable pageable);
+        /**
+         * Find all sales orders with optional filters and pagination
+         */
+        @Query("""
+                        SELECT so FROM SalesOrder so
+                        WHERE (:search IS NULL OR so.soNumber LIKE %:search% OR so.customerName LIKE %:search%)
+                        AND (:customerId IS NULL OR so.customer.id = :customerId)
+                        AND (:warehouseId IS NULL OR so.warehouse.id = :warehouseId)
+                        AND (:status IS NULL OR so.status = :status)
+                        AND (:createdByUserId IS NULL OR so.createdByUser.id = :createdByUserId)
+                        AND (:startDate IS NULL OR so.orderDate >= :startDate)
+                        AND (:endDate IS NULL OR so.orderDate <= :endDate)
+                        """)
+        Page<SalesOrder> findAllWithFilters(
+                        @Param("search") String search,
+                        @Param("customerId") Long customerId,
+                        @Param("warehouseId") Long warehouseId,
+                        @Param("status") SalesOrderStatus status,
+                        @Param("createdByUserId") Long createdByUserId,
+                        @Param("startDate") LocalDate startDate,
+                        @Param("endDate") LocalDate endDate,
+                        Pageable pageable);
 
-    /**
-     * Find sales orders by customer
-     */
-    @Query("""
-            SELECT so FROM SalesOrder so
-            WHERE so.customer.id = :customerId
-            AND (:status IS NULL OR so.status = :status)
-            AND (:startDate IS NULL OR so.orderDate >= :startDate)
-            AND (:endDate IS NULL OR so.orderDate <= :endDate)
-            """)
-    Page<SalesOrder> findByCustomerIdWithFilters(
-            @Param("customerId") Long customerId,
-            @Param("status") SalesOrderStatus status,
-            @Param("startDate") LocalDate startDate,
-            @Param("endDate") LocalDate endDate,
-            Pageable pageable);
+        /**
+         * Find sales orders by customer
+         */
+        @Query("""
+                        SELECT so FROM SalesOrder so
+                        WHERE so.customer.id = :customerId
+                        AND (:status IS NULL OR so.status = :status)
+                        AND (:startDate IS NULL OR so.orderDate >= :startDate)
+                        AND (:endDate IS NULL OR so.orderDate <= :endDate)
+                        """)
+        Page<SalesOrder> findByCustomerIdWithFilters(
+                        @Param("customerId") Long customerId,
+                        @Param("status") SalesOrderStatus status,
+                        @Param("startDate") LocalDate startDate,
+                        @Param("endDate") LocalDate endDate,
+                        Pageable pageable);
 
-    /**
-     * Count SOs created on a given date - used for SO number sequence generation
-     */
-    @Query("SELECT COUNT(so) FROM SalesOrder so WHERE so.orderDate = :date")
-    long countByOrderDate(@Param("date") LocalDate date);
+        /**
+         * Count SOs created on a given date - used for SO number sequence generation
+         */
+        @Query("SELECT COUNT(so) FROM SalesOrder so WHERE so.orderDate = :date")
+        long countByOrderDate(@Param("date") LocalDate date);
+
+        // Add to SalesOrderRepository
+
+        /**
+         * Count sales orders by status.
+         * Spring Data derives SELECT COUNT(*) WHERE status = ? — no JPQL needed.
+         */
+        long countByStatus(SalesOrderStatus status);
 }
