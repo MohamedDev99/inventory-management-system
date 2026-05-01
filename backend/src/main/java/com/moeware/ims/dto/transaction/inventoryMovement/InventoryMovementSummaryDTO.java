@@ -24,22 +24,22 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@Schema(description = "Aggregated summary of inventory movements over a date range")
+@Schema(description = "Aggregated summary of inventory movements over a specified date range")
 public class InventoryMovementSummaryDTO {
 
-    @Schema(description = "Reporting period")
+    @Schema(description = "Reporting period covered by this summary")
     private PeriodDTO period;
 
-    @Schema(description = "Total quantities by movement type")
+    @Schema(description = "Total quantities broken down by movement type")
     private TotalsDTO totals;
 
-    @Schema(description = "Breakdown by movement type (count + total quantity)")
+    @Schema(description = "Per movement-type breakdown showing count and total quantity")
     private List<ByTypeDTO> byMovementType;
 
-    @Schema(description = "Breakdown per warehouse (receipts, shipments, net change)")
+    @Schema(description = "Per warehouse breakdown showing receipts, shipments, and net change")
     private List<ByWarehouseDTO> byWarehouse;
 
-    // ----------------------------------------------------------------
+    // ---- Nested DTOs ----
 
     @Data
     @NoArgsConstructor
@@ -48,10 +48,10 @@ public class InventoryMovementSummaryDTO {
     @Schema(description = "Date range for the summary")
     public static class PeriodDTO {
 
-        @Schema(description = "Start of the reporting period", example = "2026-01-01T00:00:00")
+        @Schema(description = "Start of the reporting period (inclusive)", example = "2026-01-01T00:00:00")
         private LocalDateTime startDate;
 
-        @Schema(description = "End of the reporting period", example = "2026-02-09T23:59:59")
+        @Schema(description = "End of the reporting period (inclusive)", example = "2026-02-09T23:59:59")
         private LocalDateTime endDate;
     }
 
@@ -59,19 +59,19 @@ public class InventoryMovementSummaryDTO {
     @NoArgsConstructor
     @AllArgsConstructor
     @Builder
-    @Schema(description = "Total quantities by movement type")
+    @Schema(description = "Total quantities by movement type across the entire period")
     public static class TotalsDTO {
 
-        @Schema(description = "Total units received (RECEIPT movements)", example = "2500")
+        @Schema(description = "Total units received into any warehouse (RECEIPT movements)", example = "2500")
         private Long receipts;
 
-        @Schema(description = "Total units shipped (SHIPMENT movements)", example = "1800")
+        @Schema(description = "Total units shipped out to customers (SHIPMENT movements)", example = "1800")
         private Long shipments;
 
         @Schema(description = "Total units transferred between warehouses (TRANSFER movements)", example = "350")
         private Long transfers;
 
-        @Schema(description = "Total units adjusted (ADJUSTMENT movements)", example = "45")
+        @Schema(description = "Total units affected by manual adjustments (ADJUSTMENT movements)", example = "45")
         private Long adjustments;
     }
 
@@ -79,17 +79,17 @@ public class InventoryMovementSummaryDTO {
     @NoArgsConstructor
     @AllArgsConstructor
     @Builder
-    @Schema(description = "Movement count and quantity for a single movement type")
+    @Schema(description = "Movement count and total quantity for a single movement type")
     public static class ByTypeDTO {
 
         @Schema(description = "Movement type", example = "RECEIPT", allowableValues = { "TRANSFER", "ADJUSTMENT",
                 "RECEIPT", "SHIPMENT" })
         private MovementType movementType;
 
-        @Schema(description = "Number of movement records", example = "125")
+        @Schema(description = "Number of individual movement records of this type", example = "125")
         private Long count;
 
-        @Schema(description = "Total quantity across all records of this type", example = "2500")
+        @Schema(description = "Sum of quantities across all records of this type", example = "2500")
         private Long totalQuantity;
     }
 
@@ -106,13 +106,13 @@ public class InventoryMovementSummaryDTO {
         @Schema(description = "Warehouse name", example = "Main Warehouse")
         private String warehouseName;
 
-        @Schema(description = "Total units received into this warehouse", example = "1500")
+        @Schema(description = "Total units received into this warehouse (RECEIPT movements)", example = "1500")
         private Long receipts;
 
-        @Schema(description = "Total units shipped out of this warehouse", example = "1200")
+        @Schema(description = "Total units shipped out of this warehouse (SHIPMENT movements)", example = "1200")
         private Long shipments;
 
-        @Schema(description = "Net quantity change (receipts minus shipments)", example = "300")
+        @Schema(description = "Net quantity change — receipts minus shipments (positive = net gain)", example = "300")
         private Long netChange;
     }
 }

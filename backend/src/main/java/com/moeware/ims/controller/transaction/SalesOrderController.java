@@ -46,7 +46,7 @@ import lombok.extern.slf4j.Slf4j;
  * workflow
  */
 @RestController
-@RequestMapping("/api/v1/sales-orders")
+@RequestMapping("/api/sales-orders")
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Sales Orders", description = "Sales order management and fulfillment workflow APIs")

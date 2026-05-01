@@ -47,7 +47,7 @@ import lombok.extern.slf4j.Slf4j;
  * Handles the full DRAFT -> SUBMITTED -> APPROVED -> RECEIVED workflow
  */
 @RestController
-@RequestMapping("/api/v1/purchase-orders")
+@RequestMapping("/api/purchase-orders")
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Purchase Orders", description = "Purchase order management and workflow APIs")

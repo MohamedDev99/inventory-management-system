@@ -321,7 +321,7 @@ public class GlobalExceptionHandler {
                 @Schema(description = "Error message", example = "StockAdjustment with id 45 is pending approval")
                 private String message;
 
-                @Schema(description = "Request path", example = "/api/v1/inventory/adjust/45")
+                @Schema(description = "Request path", example = "/api/inventory/adjust/45")
                 private String path;
 
                 @Schema(description = "Resource type that is pending", example = "StockAdjustment")
@@ -349,7 +349,7 @@ public class GlobalExceptionHandler {
                 @Schema(description = "Error message")
                 private String message;
 
-                @Schema(description = "Request path", example = "/api/v1/inventory/transfer")
+                @Schema(description = "Request path", example = "/api/inventory/transfer")
                 private String path;
 
                 @Schema(description = "Entity type involved in the conflict", example = "InventoryItem")

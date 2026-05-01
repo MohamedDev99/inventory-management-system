@@ -12,42 +12,53 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * Request body for POST /api/stock-adjustments.
+ *
+ * <p>
+ * The adjustment is saved as PENDING and does NOT modify inventory until
+ * a manager approves it via PATCH /{id}/approve.
+ * </p>
+ *
+ * @author MoeWare Team
+ */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@Schema(description = "Request to create a stock adjustment")
+@Schema(description = "Request body for creating a stock adjustment. " +
+                "The adjustment is saved as PENDING and does not affect inventory until approved.")
 public class StockAdjustmentRequest {
 
-        @Schema(description = "Product ID", example = "10", requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(description = "ID of the product whose inventory is being adjusted", example = "10", requiredMode = Schema.RequiredMode.REQUIRED)
         @NotNull(message = "Product ID is required")
         private Long productId;
 
-        @Schema(description = "Warehouse ID", example = "1", requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(description = "ID of the warehouse where the adjustment is being made", example = "1", requiredMode = Schema.RequiredMode.REQUIRED)
         @NotNull(message = "Warehouse ID is required")
         private Long warehouseId;
 
-        @Schema(description = "Quantity change (positive for additions, negative for removals)", example = "-2", requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(description = "Quantity change — positive for additions (ADD), negative for removals (REMOVE). " +
+                        "Must not be zero. Sign must be consistent with adjustmentType.", example = "-2", requiredMode = Schema.RequiredMode.REQUIRED)
         @NotNull(message = "Quantity change is required")
         private Integer quantityChange;
 
-        @Schema(description = "Adjustment type", example = "REMOVE", requiredMode = Schema.RequiredMode.REQUIRED, allowableValues = {
-                        "ADD", "REMOVE",
-                        "CORRECTION" })
+        @Schema(description = "Type of adjustment operation", example = "REMOVE", allowableValues = { "ADD", "REMOVE",
+                        "CORRECTION" }, requiredMode = Schema.RequiredMode.REQUIRED)
         @NotNull(message = "Adjustment type is required")
         private AdjustmentType adjustmentType;
 
-        @Schema(description = "Reason for adjustment", example = "DAMAGED", requiredMode = Schema.RequiredMode.REQUIRED, allowableValues = {
-                        "DAMAGED",
-                        "EXPIRED", "THEFT", "COUNT_ERROR", "RETURN", "OTHER" })
+        @Schema(description = "Standardized reason for the adjustment", example = "DAMAGED", allowableValues = {
+                        "DAMAGED", "EXPIRED", "THEFT", "COUNT_ERROR", "RETURN",
+                        "OTHER" }, requiredMode = Schema.RequiredMode.REQUIRED)
         @NotNull(message = "Reason is required")
         private AdjustmentReason reason;
 
-        @Schema(description = "Additional notes", example = "Water damage during inspection")
+        @Schema(description = "Additional notes providing more detail about the adjustment", example = "Water damage found during routine warehouse inspection")
         @Size(max = 1000, message = "Notes must not exceed 1000 characters")
         private String notes;
 
-        @Schema(description = "User ID performing the adjustment", example = "5", requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(description = "ID of the warehouse staff member submitting this adjustment request", example = "5", requiredMode = Schema.RequiredMode.REQUIRED)
         @NotNull(message = "Performed by user ID is required")
         private Long performedBy;
 
@@ -63,7 +74,7 @@ public class StockAdjustmentRequest {
                 return switch (adjustmentType) {
                         case ADD -> quantityChange > 0;
                         case REMOVE -> quantityChange < 0;
-                        case CORRECTION -> true; // correction can be either sign
+                        case CORRECTION -> true;
                 };
         }
 }

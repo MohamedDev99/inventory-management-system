@@ -10,56 +10,65 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * Response DTO for a single inventory movement record.
+ *
+ * @author MoeWare Team
+ */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@Schema(description = "Inventory movement record")
+@Schema(description = "Inventory movement record — tracks a single stock movement event")
 public class InventoryMovementDTO {
 
-    @Schema(description = "Movement ID", example = "1523")
+    @Schema(description = "Unique identifier of the movement record", example = "1523", accessMode = Schema.AccessMode.READ_ONLY)
     private Long id;
 
-    @Schema(description = "Product information")
+    @Schema(description = "Product that was moved")
     private ProductSummaryDTO product;
 
-    @Schema(description = "Source warehouse (null for receipts)")
+    @Schema(description = "Source warehouse — null for RECEIPT movements (stock arriving from a supplier)")
     private WarehouseSummaryDTO fromWarehouse;
 
-    @Schema(description = "Destination warehouse (null for shipments)")
+    @Schema(description = "Destination warehouse — null for SHIPMENT movements (stock leaving to a customer)")
     private WarehouseSummaryDTO toWarehouse;
 
-    @Schema(description = "Quantity moved", example = "10")
+    @Schema(description = "Number of units moved", example = "10", minimum = "1")
     private Integer quantity;
 
-    @Schema(description = "Movement type", example = "TRANSFER")
+    @Schema(description = "Type of inventory movement", example = "TRANSFER", allowableValues = { "TRANSFER",
+            "ADJUSTMENT", "RECEIPT", "SHIPMENT" })
     private MovementType movementType;
 
-    @Schema(description = "Reason for movement", example = "Rebalancing stock levels")
+    @Schema(description = "Reason or explanation for the movement", example = "Rebalancing stock levels between warehouses")
     private String reason;
 
-    @Schema(description = "Reference number (PO, SO, etc.)", example = "PO-20260131-0001")
+    @Schema(description = "Reference to the related document (PO number, SO number, adjustment ID, etc.)", example = "PO-20260131-0001")
     private String referenceNumber;
 
-    @Schema(description = "User who performed the movement")
+    @Schema(description = "User who performed or authorized the movement")
     private UserSummaryDTO performedBy;
 
-    @Schema(description = "Movement timestamp", example = "2026-01-31T10:30:00")
+    @Schema(description = "Date and time when the movement occurred", example = "2026-01-31T10:30:00", accessMode = Schema.AccessMode.READ_ONLY)
     private LocalDateTime movementDate;
 
-    @Schema(description = "Creation timestamp")
+    @Schema(description = "Record creation timestamp", example = "2026-01-31T10:30:05", accessMode = Schema.AccessMode.READ_ONLY)
     private LocalDateTime createdAt;
+
+    // ---- Nested summaries ----
 
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
     @Builder
-    @Schema(description = "Product summary")
+    @Schema(description = "Condensed product information included in a movement record")
     public static class ProductSummaryDTO {
+
         @Schema(description = "Product ID", example = "10")
         private Long id;
 
-        @Schema(description = "SKU", example = "LAP-001")
+        @Schema(description = "Stock keeping unit", example = "LAP-001")
         private String sku;
 
         @Schema(description = "Product name", example = "Dell Laptop XPS 15")
@@ -70,15 +79,16 @@ public class InventoryMovementDTO {
     @NoArgsConstructor
     @AllArgsConstructor
     @Builder
-    @Schema(description = "Warehouse summary")
+    @Schema(description = "Condensed warehouse information included in a movement record")
     public static class WarehouseSummaryDTO {
+
         @Schema(description = "Warehouse ID", example = "1")
         private Long id;
 
         @Schema(description = "Warehouse name", example = "Main Warehouse")
         private String name;
 
-        @Schema(description = "Warehouse code", example = "WH001")
+        @Schema(description = "Short warehouse code", example = "WH001")
         private String code;
     }
 
@@ -86,8 +96,9 @@ public class InventoryMovementDTO {
     @NoArgsConstructor
     @AllArgsConstructor
     @Builder
-    @Schema(description = "User summary")
+    @Schema(description = "Condensed user information included in a movement record")
     public static class UserSummaryDTO {
+
         @Schema(description = "User ID", example = "5")
         private Long id;
 
