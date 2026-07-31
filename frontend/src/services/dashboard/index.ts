@@ -1,0 +1,11 @@
+// Dashboard Service - Re-export all hooks
+export * from "./useDashboardOverview"
+export * from "./useDashboardInventorySummary"
+export * from "./useDashboardSalesAnalytics"
+export * from "./useDashboardPurchaseAnalytics"
+export * from "./useDashboardLowStockAlerts"
+export * from "./useDashboardPendingActions"
+export * from "./useDashboardActivityFeed"
+export * from "./useDashboardInventoryTrend"
+export * from "./useDashboardSalesTrend"
+export * from "./useDashboardTopSellingProducts"
