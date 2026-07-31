@@ -1,0 +1,183 @@
+import { useReducer } from "react"
+import {
+  useShipments as useShipmentsQuery,
+  useCreateShipment,
+  useUpdateShipmentStatus,
+  useDeliverShipment,
+} from "@/services/shipment"
+import type { Shipment } from "@/types"
+import type { CreateShipmentRequest } from "@/lib/schemas/shipment/request"
+import type { UpdateShipmentStatusData } from "@/services/shipment/useUpdateShipmentStatus"
+import type { DeliverShipmentData } from "@/services/shipment/useDeliverShipment"
+
+type TimeFilter = "1d" | "7d" | "1m" | "3m" | "6m" | "1y" | "3y" | "5y"
+
+// Consolidate filter state
+interface FilterState {
+  timeFilter: TimeFilter
+  searchQuery: string
+  currentPage: number
+  pageSize: number
+}
+
+type FilterAction =
+  | { type: "SET_TIME_FILTER"; payload: TimeFilter }
+  | { type: "SET_SEARCH_QUERY"; payload: string }
+  | { type: "SET_CURRENT_PAGE"; payload: number }
+  | { type: "RESET_PAGE" }
+
+function filterReducer(state: FilterState, action: FilterAction): FilterState {
+  switch (action.type) {
+    case "SET_TIME_FILTER":
+      return { ...state, timeFilter: action.payload }
+    case "SET_SEARCH_QUERY":
+      return { ...state, searchQuery: action.payload, currentPage: 0 }
+    case "SET_CURRENT_PAGE":
+      return { ...state, currentPage: action.payload }
+    case "RESET_PAGE":
+      return { ...state, currentPage: 0 }
+    default:
+      return state
+  }
+}
+
+// Consolidate modal state
+interface ModalState {
+  isCreateModalOpen: boolean
+}
+
+type ModalAction =
+  | { type: "OPEN_CREATE" }
+  | { type: "CLOSE_CREATE" }
+
+function modalReducer(state: ModalState, action: ModalAction): ModalState {
+  switch (action.type) {
+    case "OPEN_CREATE":
+      return { ...state, isCreateModalOpen: true }
+    case "CLOSE_CREATE":
+      return { ...state, isCreateModalOpen: false }
+    default:
+      return state
+  }
+}
+
+interface UseShipmentsReturn {
+  // State
+  timeFilter: TimeFilter
+  setTimeFilter: (value: TimeFilter) => void
+  searchQuery: string
+  setSearchQuery: (value: string) => void
+  currentPage: number
+  setCurrentPage: (page: number) => void
+  pageSize: number
+  
+  // Modal state
+  isCreateModalOpen: boolean
+  setIsCreateModalOpen: (open: boolean) => void
+  
+  // Data
+  shipments: Shipment[]
+  totalElements: number
+  totalPages: number
+  isLoading: boolean
+  
+  // Mutations
+  createShipment: ReturnType<typeof useCreateShipment>
+  updateStatus: ReturnType<typeof useUpdateShipmentStatus>
+  deliverShipment: ReturnType<typeof useDeliverShipment>
+  
+  // Handlers
+  handleSearch: () => void
+  handleCreate: (data: CreateShipmentRequest) => void
+  handleUpdateStatus: (id: number, data: UpdateShipmentStatusData) => void
+  handleDeliver: (id: number, data?: DeliverShipmentData) => void
+  closeCreateModal: () => void
+}
+
+export function useShipments(): UseShipmentsReturn {
+  // Consolidated filter state
+  const [filterState, dispatchFilter] = useReducer(filterReducer, {
+    timeFilter: "1m",
+    searchQuery: "",
+    currentPage: 0,
+    pageSize: 10,
+  })
+  
+  // Consolidated modal state
+  const [modalState, dispatchModal] = useReducer(modalReducer, {
+    isCreateModalOpen: false,
+  })
+  
+  // React Query hooks
+  const { data: shipmentsData, isLoading } = useShipmentsQuery({
+    page: filterState.currentPage,
+    size: filterState.pageSize,
+    sort: "createdAt,desc",
+    search: filterState.searchQuery,
+  })
+  
+  const createShipment = useCreateShipment()
+  const updateStatus = useUpdateShipmentStatus()
+  const deliverShipment = useDeliverShipment()
+  
+  const shipments = shipmentsData?.data?.content || []
+  const totalElements = shipmentsData?.data?.totalElements || 0
+  const totalPages = shipmentsData?.data?.totalPages || 0
+  
+  // Filter actions
+  const setTimeFilter = (value: TimeFilter) => dispatchFilter({ type: "SET_TIME_FILTER", payload: value })
+  const setSearchQuery = (value: string) => dispatchFilter({ type: "SET_SEARCH_QUERY", payload: value })
+  const setCurrentPage = (page: number) => dispatchFilter({ type: "SET_CURRENT_PAGE", payload: page })
+  const handleSearch = () => dispatchFilter({ type: "RESET_PAGE" })
+  
+  // Modal actions
+  const setIsCreateModalOpen = (value: boolean) => value ? dispatchModal({ type: "OPEN_CREATE" }) : dispatchModal({ type: "CLOSE_CREATE" })
+  const closeCreateModal = () => dispatchModal({ type: "CLOSE_CREATE" })
+  
+  // Mutation handlers - callbacks handle toasts
+  const handleCreate = (data: CreateShipmentRequest) => {
+    createShipment.mutate(data)
+    closeCreateModal()
+  }
+  
+  const handleUpdateStatus = (id: number, data: UpdateShipmentStatusData) => {
+    updateStatus.mutate({ id, data })
+  }
+  
+  const handleDeliver = (id: number, data?: DeliverShipmentData) => {
+    deliverShipment.mutate({ id, data })
+  }
+  
+  return {
+    // State
+    timeFilter: filterState.timeFilter,
+    setTimeFilter,
+    searchQuery: filterState.searchQuery,
+    setSearchQuery,
+    currentPage: filterState.currentPage,
+    setCurrentPage,
+    pageSize: filterState.pageSize,
+    
+    // Modal state
+    isCreateModalOpen: modalState.isCreateModalOpen,
+    setIsCreateModalOpen,
+    
+    // Data
+    shipments,
+    totalElements,
+    totalPages,
+    isLoading,
+    
+    // Mutations
+    createShipment,
+    updateStatus,
+    deliverShipment,
+    
+    // Handlers
+    handleSearch,
+    handleCreate,
+    handleUpdateStatus,
+    handleDeliver,
+    closeCreateModal,
+  }
+}
