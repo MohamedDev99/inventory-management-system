@@ -1,0 +1,271 @@
+# =============================================================================
+# docker-compose.yml — MoeWare Inventory Management System
+# Full stack: PostgreSQL + Spring Boot Backend + React Frontend + pgAdmin
+# =============================================================================
+# Version "3.9" is the Compose file format version — not the Docker version.
+# It enables features like named volumes, custom networks, and healthcheck depends_on.
+version: "3.9"
+
+# =============================================================================
+# SERVICES
+# Each service = one container. They communicate over the custom network below.
+# =============================================================================
+services:
+
+  # ---------------------------------------------------------------------------
+  # 1. PostgreSQL — The database
+  # ---------------------------------------------------------------------------
+  postgres:
+    # Use the official PostgreSQL image, pinned to version 15.
+    # Always pin versions in production — "latest" can break unexpectedly.
+    image: postgres:15-alpine
+
+    # Container name shown in "docker ps" and used in logs.
+    container_name: moeware-postgres
+
+    # Restart policy: automatically restart unless manually stopped.
+    # Options: no | always | on-failure | unless-stopped
+    restart: unless-stopped
+
+    # Environment variables configure PostgreSQL on first startup.
+    # These create the database, user, and password automatically.
+    # Values come from the .env file (see .env.example).
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-moeware_db}           # Database name (default: moeware_db)
+      POSTGRES_USER: ${POSTGRES_USER:-moeware_user}     # DB username
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}            # DB password (REQUIRED — no default)
+      PGDATA: /var/lib/postgresql/data/pgdata            # Internal data directory path
+
+    # Mount a named volume so database data PERSISTS between container restarts.
+    # Without this, all data is lost every time the container stops.
+    # Format: "named_volume:path_inside_container"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+    # Map host port 5432 to container port 5432.
+    # Allows connecting from host machine tools like DBeaver or psql CLI.
+    # Format: "HOST_PORT:CONTAINER_PORT"
+    # Remove this in production to prevent direct external DB access.
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+
+    # Health check: verify PostgreSQL is accepting connections.
+    # "pg_isready" is a built-in PostgreSQL utility that checks readiness.
+    # The backend service uses this to delay startup until DB is truly ready.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-moeware_user} -d ${POSTGRES_DB:-moeware_db}"]
+      interval: 10s      # Check every 10 seconds
+      timeout: 5s        # Fail if no response within 5 seconds
+      retries: 5         # Mark unhealthy after 5 consecutive failures
+      start_period: 30s  # Give PostgreSQL 30s to initialize before checks begin
+
+    # Attach to the backend network so the Spring Boot app can reach it.
+    networks:
+      - backend-network
+
+
+  # ---------------------------------------------------------------------------
+  # 2. Spring Boot Backend — The REST API
+  # ---------------------------------------------------------------------------
+  backend:
+    # Build the backend image from the Dockerfile in the ./backend directory.
+    # "context" = the folder sent to the Docker daemon as build context.
+    # "dockerfile" = path to the Dockerfile (relative to context).
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+
+    container_name: moeware-backend
+
+    restart: unless-stopped
+
+    # Pass environment variables into the Spring Boot application.
+    # Spring Boot reads these and maps them to application.yml properties.
+    # The ${VAR:-default} syntax reads from .env file, with fallback defaults.
+    environment:
+      # ── Database connection ────────────────────────────────────────────────
+      # "postgres" here refers to the SERVICE NAME above — Docker's internal DNS
+      # resolves service names to container IPs automatically within the network.
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-moeware_db}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-moeware_user}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+
+      # ── JPA / Hibernate settings ───────────────────────────────────────────
+      # "validate" = check schema matches entities on startup (safest for prod)
+      # Other options: create | create-drop | update | none
+      SPRING_JPA_HIBERNATE_DDL_AUTO: ${JPA_DDL_AUTO:-validate}
+
+      # ── Flyway database migrations ─────────────────────────────────────────
+      SPRING_FLYWAY_ENABLED: "true"
+      SPRING_FLYWAY_BASELINE_ON_MIGRATE: "true"
+
+      # ── JWT security ───────────────────────────────────────────────────────
+      JWT_SECRET: ${JWT_SECRET}                          # REQUIRED — must be in .env
+      JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS:-3600000}  # Default: 1 hour
+
+      # ── AWS S3 for file uploads ────────────────────────────────────────────
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET:-moeware-uploads}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+
+      # ── Spring profile ─────────────────────────────────────────────────────
+      # Activates the "docker" profile in application-docker.yml
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-docker}
+
+      # ── JVM tuning ────────────────────────────────────────────────────────
+      # Set heap size appropriate for a t3.medium EC2 (4 GB RAM).
+      # -Xms = initial heap, -Xmx = max heap
+      JAVA_OPTS: "-Xms256m -Xmx512m"
+
+    # Map host port 8080 to container port 8080.
+    # Access the API at http://localhost:8080/api/v1/...
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+
+    # depends_on ensures postgres STARTS before backend.
+    # "condition: service_healthy" goes further — it waits until the
+    # postgres healthcheck passes (DB is actually accepting connections).
+    # This prevents "connection refused" errors during startup.
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    # Health check for the backend using Spring Boot Actuator's health endpoint.
+    # Returns HTTP 200 when the app is running and all dependencies are UP.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q '\"status\":\"UP\"' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s   # Spring Boot startup can take 30-60s — give it time
+
+    # Attach to BOTH networks:
+    # - backend-network: to talk to PostgreSQL
+    # - frontend-network: so the frontend container (via Nginx proxy) can reach it
+    networks:
+      - backend-network
+      - frontend-network
+
+    # Mount application logs to the host for easy debugging.
+    # "ro" = read-only for the container (Nginx reading logs, not writing).
+    # Backend writes to /app/logs inside the container.
+    volumes:
+      - backend_logs:/app/logs
+
+
+  # ---------------------------------------------------------------------------
+  # 3. React Frontend — The Nginx web server
+  # ---------------------------------------------------------------------------
+  frontend:
+    # Pass build arguments used during the Docker image build process.
+    # These are baked into the Vite bundle at BUILD time.
+    # For runtime env vars, use the env.sh script described in the Dockerfile.
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8080/api/v1}
+
+    container_name: moeware-frontend
+
+    restart: unless-stopped
+
+    # Map host port 3000 to container port 80 (Nginx listens on 80 internally).
+    # Access the React app at http://localhost:3000
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+
+    # Frontend must wait for backend to be healthy before starting.
+    # Prevents the app from loading when the API is not yet ready.
+    depends_on:
+      backend:
+        condition: service_healthy
+
+    # Health check: verify Nginx is serving the frontend.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:80/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+    # Only needs the frontend network to communicate with the backend.
+    networks:
+      - frontend-network
+
+
+  # ---------------------------------------------------------------------------
+  # 4. pgAdmin — PostgreSQL GUI (development only)
+  # ---------------------------------------------------------------------------
+  pgadmin:
+    # Official pgAdmin 4 image — a web-based PostgreSQL admin interface.
+    # Remove this entire service block before deploying to production.
+    image: dpage/pgadmin4:latest
+
+    container_name: moeware-pgadmin
+
+    restart: unless-stopped
+
+    # pgAdmin login credentials for the web UI.
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@moeware.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+      PGADMIN_CONFIG_SERVER_MODE: "False"  # Single-user mode (no login screen)
+
+    ports:
+      - "${PGADMIN_PORT:-5050}:80"
+
+    # Persist pgAdmin configuration (saved connections, preferences).
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+
+    # pgAdmin only needs to reach PostgreSQL.
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    networks:
+      - backend-network
+
+    # Run only in development profiles.
+    # Override with: COMPOSE_PROFILES=dev docker-compose up
+    profiles:
+      - dev
+
+
+# =============================================================================
+# NETWORKS
+# Isolate communication between service tiers (security best practice).
+# Containers on different networks CANNOT communicate unless they share one.
+# =============================================================================
+networks:
+  # backend-network: PostgreSQL + Spring Boot + pgAdmin
+  # The database is invisible to the frontend container.
+  backend-network:
+    driver: bridge   # Standard Docker bridge network (default)
+
+  # frontend-network: Spring Boot + React/Nginx
+  # The frontend can call the API; it cannot directly reach the database.
+  frontend-network:
+    driver: bridge
+
+
+# =============================================================================
+# VOLUMES
+# Named volumes managed by Docker — data persists across container restarts.
+# Unlike bind mounts, Docker manages the storage location automatically.
+# =============================================================================
+volumes:
+  # PostgreSQL data — ALL your database records live here.
+  # Deleting this volume = deleting all data. Back it up before "docker-compose down -v".
+  postgres_data:
+    driver: local
+
+  # Spring Boot application logs.
+  backend_logs:
+    driver: local
+
+  # pgAdmin configuration and saved server connections.
+  pgadmin_data:
+    driver: local
