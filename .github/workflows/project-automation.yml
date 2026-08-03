@@ -1,67 +1,294 @@
 name: Project Board Automation
 
+# ─────────────────────────────────────────────────────────────────────────────
+# REQUIRED GITHUB SECRETS — go to: Repo → Settings → Secrets → Actions
+# ─────────────────────────────────────────────────────────────────────────────
+#
+#   ADD_TO_PROJECT_PAT      → A Personal Access Token (PAT) — NOT GITHUB_TOKEN
+#                             GITHUB_TOKEN does NOT have project scope, so it
+#                             will silently fail or error on every step.
+#
+#                             HOW TO CREATE THE PAT:
+#                             1. Go to https://github.com/settings/tokens
+#                             2. Click "Generate new token" → "Fine-grained token"
+#                             3. Set owner to your account
+#                             4. Under "Repository permissions":
+#                                  - Issues        → Read-only
+#                                  - Pull requests → Read-only
+#                             5. Under "Account permissions":
+#                                  - Projects      → Read and write   ← CRITICAL
+#                             6. Copy the token and save it as ADD_TO_PROJECT_PAT
+#                                in: Repo → Settings → Secrets → Actions
+#
+#                             Alternative (classic token):
+#                             1. Go to https://github.com/settings/tokens/new
+#                             2. Check scopes: "repo" + "project"
+#                             3. Save as ADD_TO_PROJECT_PAT
+#
+#   PROJECT_URL             → The full URL of your GitHub Project board
+#                             e.g. https://github.com/users/my_username/projects/1
+#                             e.g. https://github.com/orgs/my_org/projects/1
+#                             Save this as a secret OR replace the value inline below.
+#
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# IMPORTANT — HOW COLUMN AUTOMATION ACTUALLY WORKS:
+#
+#   actions/add-to-project@v2 can only ADD items to your project board.
+#   It CANNOT move items between columns on its own.
+#
+#   To move items between columns (Backlog → In Progress → Review → Done)
+#   you need to use GitHub's GraphQL API directly, which is what this
+#   workflow does in the "move-card" steps below.
+#
+#   Your project board must have these Status field options (exact names):
+#     - Backlog
+#     - In Progress
+#     - Review
+#     - Done
+#
+#   To check/set these: open your Project → Settings → Fields → Status
+#
+# ─────────────────────────────────────────────────────────────────────────────
+
 on:
   issues:
-    types: [opened, assigned, closed, reopened]
+    types:
+      - opened       # → move to Backlog
+      - assigned     # → move to In Progress
+      - closed       # → move to Done
+      - reopened     # → move to Backlog
+
   pull_request:
-    types: [opened, ready_for_review, review_requested, closed]
+    types:
+      - opened            # → add to project + move to In Progress
+      - ready_for_review  # → move to Review
+      - review_requested  # → move to Review
+      - closed            # → move to Done (only if merged)
 
 jobs:
-  auto-assign-project:
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # JOB 1 — Add item to project board (issues and PRs)
+  #
+  # This job runs first on any trigger and ensures the item exists on the
+  # board before we try to move it to a column.
+  # ═══════════════════════════════════════════════════════════════════════════
+  add-to-project:
+    name: "Add item to project board"
     runs-on: ubuntu-latest
-    name: Auto-manage project cards
-    permissions:
-      issues: write
-      pull-requests: write
-      repository-projects: write
+
     steps:
-      - name: Move new issues to Backlog
-        if: github.event.action == 'opened' && github.event.issue
-        uses: actions/add-to-project@v0.5.0
+      - name: Add issue or PR to project
+        uses: actions/add-to-project@v2      # ← fixed: was @v1.0.2 (does not exist)
         with:
-          project-url: https://github.com/users/MohamedDev99/projects/1
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          labeled: ""
-          label-operator: OR
+          project-url: ${{ secrets.PROJECT_URL }}
+          github-token: ${{ secrets.ADD_TO_PROJECT_PAT }}   # ← fixed: must be PAT, not GITHUB_TOKEN
 
-      - name: Move assigned issues to In Progress
-        if: github.event.action == 'assigned' && github.event.issue
-        uses: actions/add-to-project@v0.5.0
-        with:
-          project-url: https://github.com/users/MohamedDev99/projects/1
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+  # ═══════════════════════════════════════════════════════════════════════════
+  # JOB 2 — Move item to the correct column using GitHub GraphQL API
+  #
+  # Runs after add-to-project so the item is guaranteed to exist on the board.
+  # Uses the GraphQL API to:
+  #   1. Find the project ID and Status field ID
+  #   2. Find the item ID on the board (matched by issue/PR node ID)
+  #   3. Find the target column option ID by name
+  #   4. Call updateProjectV2ItemFieldValue to move the card
+  # ═══════════════════════════════════════════════════════════════════════════
+  move-card:
+    name: "Move card to correct column"
+    runs-on: ubuntu-latest
+    needs: add-to-project   # wait for the item to be added first
 
-      - name: Move closed issues to Done
-        if: github.event.action == 'closed' && github.event.issue
-        uses: actions/add-to-project@v0.5.0
-        with:
-          project-url: https://github.com/users/MohamedDev99/projects/1
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      # ── Determine which column to move the card to ─────────────────────────
+      - name: Resolve target column name
+        id: resolve-column
+        run: |
+          ACTION="${{ github.event.action }}"
+          IS_MERGED="${{ github.event.pull_request.merged }}"
+          EVENT="${{ github.event_name }}"
 
-      - name: Move reopened issues to Backlog
-        if: github.event.action == 'reopened' && github.event.issue
-        uses: actions/add-to-project@v0.5.0
-        with:
-          project-url: https://github.com/users/MohamedDev99/projects/1
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          TARGET=""
 
-      - name: Move new PRs to In Progress
-        if: github.event.action == 'opened' && github.event.pull_request
-        uses: actions/add-to-project@v0.5.0
-        with:
-          project-url: https://github.com/users/MohamedDev99/projects/1
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          if [[ "$EVENT" == "issues" ]]; then
+            case "$ACTION" in
+              opened|reopened)  TARGET="Backlog"      ;;
+              assigned)         TARGET="In Progress"  ;;
+              closed)           TARGET="Done"         ;;
+            esac
+          fi
 
-      - name: Move PRs to Review when review requested
-        if: github.event.action == 'review_requested' && github.event.pull_request
-        uses: actions/add-to-project@v0.5.0
-        with:
-          project-url: https://github.com/users/MohamedDev99/projects/1
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          if [[ "$EVENT" == "pull_request" ]]; then
+            case "$ACTION" in
+              opened)                         TARGET="In Progress"  ;;
+              ready_for_review|review_requested) TARGET="Review"   ;;
+              closed)
+                # Only move to Done if the PR was MERGED, not just closed
+                if [[ "$IS_MERGED" == "true" ]]; then
+                  TARGET="Done"
+                else
+                  TARGET="Backlog"   # closed without merge → move back to Backlog
+                fi
+                ;;
+            esac
+          fi
 
-      - name: Move merged PRs to Done
-        if: github.event.pull_request.merged == true
-        uses: actions/add-to-project@v0.5.0
-        with:
-          project-url: https://github.com/users/MohamedDev99/projects/1
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          echo "target_column=${TARGET}" >> $GITHUB_OUTPUT
+          echo "Resolved column: '${TARGET}' (event=$EVENT, action=$ACTION)"
+
+      # ── Skip if we couldn't resolve a column (safety guard) ────────────────
+      - name: Skip if no column resolved
+        if: steps.resolve-column.outputs.target_column == ''
+        run: |
+          echo "ℹ️  No column mapping for this event/action combination — skipping."
+
+      # ── Move the card via GraphQL API ──────────────────────────────────────
+      - name: Move card to ${{ steps.resolve-column.outputs.target_column }}
+        if: steps.resolve-column.outputs.target_column != ''
+        env:
+          GH_TOKEN: ${{ secrets.ADD_TO_PROJECT_PAT }}   # SECRET: ADD_TO_PROJECT_PAT
+          PROJECT_URL: ${{ secrets.PROJECT_URL }}
+          TARGET_COLUMN: ${{ steps.resolve-column.outputs.target_column }}
+          # The node ID of the issue or PR that triggered this workflow
+          ITEM_NODE_ID: ${{ github.event.issue.node_id || github.event.pull_request.node_id }}
+        run: |
+          set -e
+
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  Moving card to: $TARGET_COLUMN"
+          echo "  Item node ID  : $ITEM_NODE_ID"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+          # ── Step 1: Extract owner and project number from the project URL ──
+          # e.g. https://github.com/users/my_username/projects/1
+          #      https://github.com/orgs/my_org/projects/1
+          OWNER=$(echo "$PROJECT_URL" | sed -E 's|https://github.com/(users\|orgs)/([^/]+)/projects/.*|\2|')
+          PROJECT_NUMBER=$(echo "$PROJECT_URL" | grep -oE '[0-9]+$')
+          OWNER_TYPE=$(echo "$PROJECT_URL" | grep -oE '(users|orgs)')
+
+          echo "Owner      : $OWNER"
+          echo "Owner type : $OWNER_TYPE"
+          echo "Project #  : $PROJECT_NUMBER"
+
+          # ── Step 2: Get the Project node ID and Status field details ───────
+          if [[ "$OWNER_TYPE" == "users" ]]; then
+            PROJECT_DATA=$(gh api graphql -f query="
+              query {
+                user(login: \"$OWNER\") {
+                  projectV2(number: $PROJECT_NUMBER) {
+                    id
+                    fields(first: 20) {
+                      nodes {
+                        ... on ProjectV2SingleSelectField {
+                          id
+                          name
+                          options {
+                            id
+                            name
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            " --jq '.data.user.projectV2')
+          else
+            PROJECT_DATA=$(gh api graphql -f query="
+              query {
+                organization(login: \"$OWNER\") {
+                  projectV2(number: $PROJECT_NUMBER) {
+                    id
+                    fields(first: 20) {
+                      nodes {
+                        ... on ProjectV2SingleSelectField {
+                          id
+                          name
+                          options {
+                            id
+                            name
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            " --jq '.data.organization.projectV2')
+          fi
+
+          PROJECT_ID=$(echo "$PROJECT_DATA" | jq -r '.id')
+          echo "Project ID : $PROJECT_ID"
+
+          # ── Step 3: Find the "Status" field ID and target option ID ────────
+          STATUS_FIELD=$(echo "$PROJECT_DATA" | jq -r '.fields.nodes[] | select(.name == "Status")')
+          STATUS_FIELD_ID=$(echo "$STATUS_FIELD" | jq -r '.id')
+          TARGET_OPTION_ID=$(echo "$STATUS_FIELD" | jq -r --arg col "$TARGET_COLUMN" '.options[] | select(.name == $col) | .id')
+
+          echo "Status field ID    : $STATUS_FIELD_ID"
+          echo "Target option ID   : $TARGET_OPTION_ID"
+
+          if [[ -z "$TARGET_OPTION_ID" ]]; then
+            echo ""
+            echo "❌ Column '$TARGET_COLUMN' not found in the project's Status field."
+            echo "   Available options:"
+            echo "$STATUS_FIELD" | jq -r '.options[].name' | sed 's/^/   - /'
+            echo ""
+            echo "   Fix: open your Project → Settings → Fields → Status"
+            echo "   and make sure you have a column named exactly: '$TARGET_COLUMN'"
+            exit 1
+          fi
+
+          # ── Step 4: Find the item ID on the project board ──────────────────
+          # The item ID is different from the issue/PR node ID —
+          # it's the ID of the card on the project board itself
+          ITEM_ID=$(gh api graphql -f query="
+            query {
+              node(id: \"$PROJECT_ID\") {
+                ... on ProjectV2 {
+                  items(first: 100) {
+                    nodes {
+                      id
+                      content {
+                        ... on Issue { id }
+                        ... on PullRequest { id }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          " --jq ".data.node.items.nodes[] | select(.content.id == \"$ITEM_NODE_ID\") | .id")
+
+          if [[ -z "$ITEM_ID" ]]; then
+            echo "❌ Item not found on the project board."
+            echo "   This can happen if the add-to-project step hasn't finished yet."
+            echo "   Item node ID searched: $ITEM_NODE_ID"
+            exit 1
+          fi
+
+          echo "Board item ID: $ITEM_ID"
+
+          # ── Step 5: Move the card to the target column ──────────────────────
+          gh api graphql -f query="
+            mutation {
+              updateProjectV2ItemFieldValue(
+                input: {
+                  projectId: \"$PROJECT_ID\"
+                  itemId: \"$ITEM_ID\"
+                  fieldId: \"$STATUS_FIELD_ID\"
+                  value: {
+                    singleSelectOptionId: \"$TARGET_OPTION_ID\"
+                  }
+                }
+              ) {
+                projectV2Item {
+                  id
+                }
+              }
+            }
+          "
+
+          echo ""
+          echo "✅ Card successfully moved to: $TARGET_COLUMN"
