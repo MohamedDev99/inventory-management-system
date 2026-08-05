@@ -1,0 +1,326 @@
+name: PR Validation
+
+# ─────────────────────────────────────────────────────────────────────────────
+# REQUIRED GITHUB SECRETS — go to: Repo → Settings → Secrets → Actions
+# ─────────────────────────────────────────────────────────────────────────────
+#
+#   VITE_API_BASE_URL      → Frontend API URL used at build time
+#                            e.g. https://api.yourdomain.com
+#
+#   SONAR_TOKEN            → (optional) SonarCloud token for code quality scan
+#                            Get it from: https://sonarcloud.io → My Account → Security
+#
+#   CODECOV_TOKEN          → (optional) Codecov upload token for coverage reports
+#                            Get it from: https://app.codecov.io → your repo → Settings
+#
+# ─────────────────────────────────────────────────────────────────────────────
+
+on:
+  pull_request:
+    branches:
+      - develop
+      - main
+    types:
+      - opened
+      - synchronize  # new commit pushed to the PR branch
+      - reopened
+
+# Cancel in-progress runs when a new commit is pushed to the same PR
+concurrency:
+  group: pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  JAVA_VERSION: "17"
+  NODE_VERSION: "20"
+
+jobs:
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # JOB 1 — PR Metadata & Label check
+  # ═══════════════════════════════════════════════════════════════════════════
+  pr-check:
+    name: "PR — Metadata Check"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate PR title follows convention
+        # Enforces: feat|fix|chore|docs|refactor|test|ci: description
+        run: |
+          TITLE="${{ github.event.pull_request.title }}"
+          echo "PR Title: $TITLE"
+
+          if ! echo "$TITLE" | grep -qE "^(feat|fix|chore|docs|refactor|test|ci|perf|style|build|revert)(\(.+\))?: .{5,}"; then
+            echo ""
+            echo "❌ PR title does not follow Conventional Commits format."
+            echo ""
+            echo "   Expected format: type(scope): description"
+            echo "   Example:         feat(products): add barcode scanner support"
+            echo ""
+            echo "   Allowed types: feat, fix, chore, docs, refactor, test, ci, perf, style, build, revert"
+            exit 1
+          fi
+
+          echo "✅ PR title is valid."
+
+      - name: Check PR is not targeting main directly from a feature branch
+        # Only hotfix/ and release/ branches can target main directly
+        if: github.base_ref == 'main'
+        run: |
+          SOURCE="${{ github.head_ref }}"
+          echo "Source branch: $SOURCE"
+          echo "Target branch: main"
+
+          if ! echo "$SOURCE" | grep -qE "^(hotfix/|release/|develop)"; then
+            echo ""
+            echo "❌ Feature branches must target 'develop', not 'main'."
+            echo "   Only hotfix/, release/, or develop can merge into main."
+            exit 1
+          fi
+
+          echo "✅ Branch strategy check passed."
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # JOB 2 — Backend: Build, Test & Code Quality
+  # ═══════════════════════════════════════════════════════════════════════════
+  backend-pr:
+    name: "Backend — Build, Test & Quality"
+    runs-on: ubuntu-latest
+    needs: pr-check
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: ims_test
+          POSTGRES_USER: ims_user
+          POSTGRES_PASSWORD: ims_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ims_user"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history needed for SonarCloud blame info
+
+      - name: Set up Java ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+
+      - name: Cache Maven dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      # ── Build ──────────────────────────────────────────────────────────────
+      - name: Compile
+        working-directory: ./backend
+        run: mvn clean compile --no-transfer-progress
+
+      # ── Unit Tests ─────────────────────────────────────────────────────────
+      - name: Run unit tests
+        working-directory: ./backend
+        run: mvn test --no-transfer-progress
+        env:
+          SPRING_PROFILES_ACTIVE: test
+          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/ims_test
+          SPRING_DATASOURCE_USERNAME: ims_user
+          SPRING_DATASOURCE_PASSWORD: ims_password
+
+      # ── Integration Tests ──────────────────────────────────────────────────
+      - name: Run integration tests
+        working-directory: ./backend
+        run: mvn verify -P integration-tests --no-transfer-progress
+        env:
+          SPRING_PROFILES_ACTIVE: test
+          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/ims_test
+          SPRING_DATASOURCE_USERNAME: ims_user
+          SPRING_DATASOURCE_PASSWORD: ims_password
+
+      # ── Code Coverage ──────────────────────────────────────────────────────
+      - name: Generate coverage report (JaCoCo)
+        working-directory: ./backend
+        run: mvn jacoco:report --no-transfer-progress
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}   # SECRET: CODECOV_TOKEN
+          files: backend/target/site/jacoco/jacoco.xml
+          flags: backend
+          fail_ci_if_error: false  # Don't fail the pipeline if Codecov is down
+
+      # ── Checkstyle ─────────────────────────────────────────────────────────
+      - name: Run Checkstyle
+        working-directory: ./backend
+        run: mvn checkstyle:check --no-transfer-progress
+
+      # ── SpotBugs ───────────────────────────────────────────────────────────
+      - name: Run SpotBugs
+        working-directory: ./backend
+        run: mvn spotbugs:check --no-transfer-progress
+
+      # ── Test Report ────────────────────────────────────────────────────────
+      - name: Publish test results
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: Backend PR Test Results
+          path: backend/target/surefire-reports/*.xml
+          reporter: java-junit
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # JOB 3 — Frontend: Lint, Test & Build
+  # ═══════════════════════════════════════════════════════════════════════════
+  frontend-pr:
+    name: "Frontend — Lint, Test & Build"
+    runs-on: ubuntu-latest
+    needs: pr-check
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      # ── Lint ───────────────────────────────────────────────────────────────
+      - name: Run ESLint
+        working-directory: ./frontend
+        run: npm run lint
+
+      # ── Type Check ─────────────────────────────────────────────────────────
+      - name: TypeScript type check
+        working-directory: ./frontend
+        run: npm run type-check
+
+      # ── Unit Tests with Coverage ───────────────────────────────────────────
+      - name: Run unit tests with coverage
+        working-directory: ./frontend
+        run: npm run test -- --run --coverage --reporter=verbose
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}   # SECRET: CODECOV_TOKEN
+          files: frontend/coverage/lcov.info
+          flags: frontend
+          fail_ci_if_error: false
+
+      # ── Production Build ───────────────────────────────────────────────────
+      - name: Build for production
+        working-directory: ./frontend
+        run: npm run build
+        env:
+          VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}   # SECRET: VITE_API_BASE_URL
+
+      # ── Bundle Size Check ──────────────────────────────────────────────────
+      - name: Check bundle size
+        working-directory: ./frontend
+        run: |
+          BUNDLE_SIZE=$(du -sh dist/ | cut -f1)
+          echo "📦 Bundle size: $BUNDLE_SIZE"
+          # Warn if dist folder exceeds 10MB (adjust threshold as needed)
+          SIZE_BYTES=$(du -sb dist/ | cut -f1)
+          if [ "$SIZE_BYTES" -gt 10485760 ]; then
+            echo "⚠️  Warning: Bundle size exceeds 10MB. Consider code splitting."
+          fi
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # JOB 4 — Dependency Security Audit
+  # ═══════════════════════════════════════════════════════════════════════════
+  security-audit:
+    name: "Security — Dependency Audit"
+    runs-on: ubuntu-latest
+    needs: pr-check
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Java ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+
+      - name: Cache Maven dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      - name: Set up Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # ── npm audit ──────────────────────────────────────────────────────────
+      - name: Audit npm dependencies
+        working-directory: ./frontend
+        run: |
+          npm ci
+          npm audit --audit-level=high
+        continue-on-error: true  # Warn but don't block — fix in follow-up PR
+
+      # ── OWASP dependency check (Maven) ─────────────────────────────────────
+      - name: OWASP dependency check (Java)
+        working-directory: ./backend
+        run: mvn dependency-check:check --no-transfer-progress -DfailBuildOnCVSS=9
+        continue-on-error: true  # Only block on CVSS score 9+ (critical)
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # JOB 5 — PR Summary (gate check — all jobs must pass)
+  # ═══════════════════════════════════════════════════════════════════════════
+  pr-summary:
+    name: "PR — All Checks Summary"
+    runs-on: ubuntu-latest
+    needs: [backend-pr, frontend-pr, security-audit]
+    if: always()
+
+    steps:
+      - name: Evaluate all job results
+        run: |
+          echo "──────────────────────────────────────────────"
+          echo "  PR Validation Summary"
+          echo "──────────────────────────────────────────────"
+          echo "  Backend  : ${{ needs.backend-pr.result }}"
+          echo "  Frontend : ${{ needs.frontend-pr.result }}"
+          echo "  Security : ${{ needs.security-audit.result }}"
+          echo "──────────────────────────────────────────────"
+
+          BACKEND="${{ needs.backend-pr.result }}"
+          FRONTEND="${{ needs.frontend-pr.result }}"
+
+          # Security is advisory — it won't block merge
+          if [[ "$BACKEND" != "success" || "$FRONTEND" != "success" ]]; then
+            echo ""
+            echo "❌ Required checks failed. PR cannot be merged."
+            exit 1
+          fi
+
+          echo ""
+          echo "✅ All required checks passed. PR is ready for review."

@@ -1,0 +1,510 @@
+name: Push — Build, Dockerize & Deploy
+
+# ─────────────────────────────────────────────────────────────────────────────
+# REQUIRED GITHUB SECRETS — go to: Repo → Settings → Secrets → Actions
+# ─────────────────────────────────────────────────────────────────────────────
+#
+#   ── Docker Registry ────────────────────────────────────────────────────────
+#   DOCKERHUB_USERNAME        → Your DockerHub username
+#                               e.g. moeware
+#
+#   DOCKERHUB_TOKEN           → DockerHub access token (NOT your password)
+#                               Get it from: https://hub.docker.com → Account Settings → Security
+#
+#   ── Production Server (EC2) ────────────────────────────────────────────────
+#   PROD_SERVER_HOST          → Production EC2 public IP or domain
+#                               e.g. 54.123.45.67 or api.yourdomain.com
+#
+#   PROD_SERVER_USER          → SSH username for production server
+#                               e.g. ubuntu  (default for Ubuntu EC2)
+#
+#   PROD_SSH_PRIVATE_KEY      → Contents of your production EC2 .pem key file
+#                               Open the file and paste the full content including
+#                               -----BEGIN RSA PRIVATE KEY----- and -----END-----
+#
+#   ── Staging Server (EC2) ───────────────────────────────────────────────────
+#   STAGING_SERVER_HOST       → Staging EC2 public IP or subdomain
+#                               e.g. staging.yourdomain.com
+#
+#   STAGING_SERVER_USER       → SSH username for staging server
+#                               e.g. ubuntu
+#
+#   STAGING_SSH_PRIVATE_KEY   → Contents of your staging EC2 .pem key file
+#
+#   ── Application Config ─────────────────────────────────────────────────────
+#   PROD_DB_URL               → Production database JDBC URL
+#                               e.g. jdbc:postgresql://your-rds-host:5432/ims_prod
+#
+#   PROD_DB_USERNAME          → Production database username
+#
+#   PROD_DB_PASSWORD          → Production database password
+#
+#   STAGING_DB_URL            → Staging database JDBC URL
+#
+#   STAGING_DB_USERNAME       → Staging database username
+#
+#   STAGING_DB_PASSWORD       → Staging database password
+#
+#   PROD_JWT_SECRET           → JWT signing secret for production (min 32 chars)
+#
+#   STAGING_JWT_SECRET        → JWT signing secret for staging
+#
+#   VITE_API_BASE_URL_PROD    → Production API URL used by frontend build
+#                               e.g. https://api.yourdomain.com
+#
+#   VITE_API_BASE_URL_STAGING → Staging API URL used by frontend build
+#                               e.g. https://api.staging.yourdomain.com
+#
+#   ── Notifications ──────────────────────────────────────────────────────────
+#   SLACK_WEBHOOK_URL         → Slack incoming webhook URL for deploy notifications
+#                               Get it from: https://api.slack.com/apps → Incoming Webhooks
+#
+# ─────────────────────────────────────────────────────────────────────────────
+
+on:
+  push:
+    branches:
+      - develop   # → deploys to STAGING
+      - main      # → deploys to PRODUCTION
+
+# Cancel previous run on the same branch if a new push arrives
+concurrency:
+  group: deploy-${{ github.ref_name }}
+  cancel-in-progress: true
+
+env:
+  JAVA_VERSION: "17"
+  NODE_VERSION: "20"
+  # Image names in DockerHub: <username>/inventory-backend and <username>/inventory-frontend
+  BACKEND_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/inventory-backend
+  FRONTEND_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/inventory-frontend
+
+jobs:
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # JOB 1 — Resolve environment (staging vs production)
+  # Sets output variables used by all downstream jobs
+  # ═══════════════════════════════════════════════════════════════════════════
+  resolve-env:
+    name: "Resolve Target Environment"
+    runs-on: ubuntu-latest
+
+    outputs:
+      environment:      ${{ steps.set-env.outputs.environment }}
+      server_host:      ${{ steps.set-env.outputs.server_host }}
+      api_base_url:     ${{ steps.set-env.outputs.api_base_url }}
+
+    steps:
+      - name: Determine environment from branch
+        id: set-env
+        run: |
+          if [[ "${{ github.ref_name }}" == "main" ]]; then
+            echo "environment=production"          >> $GITHUB_OUTPUT
+            echo "server_host=${{ secrets.PROD_SERVER_HOST }}"      >> $GITHUB_OUTPUT
+            echo "api_base_url=${{ secrets.VITE_API_BASE_URL_PROD }}" >> $GITHUB_OUTPUT
+          else
+            echo "environment=staging"             >> $GITHUB_OUTPUT
+            echo "server_host=${{ secrets.STAGING_SERVER_HOST }}"   >> $GITHUB_OUTPUT
+            echo "api_base_url=${{ secrets.VITE_API_BASE_URL_STAGING }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Print resolved environment
+        run: |
+          echo "Branch    : ${{ github.ref_name }}"
+          echo "Target    : ${{ steps.set-env.outputs.environment }}"
+          echo "Server    : ${{ steps.set-env.outputs.server_host }}"
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # JOB 2 — Backend: Build JAR & Run Tests
+  # ═══════════════════════════════════════════════════════════════════════════
+  backend-build:
+    name: "Backend — Build & Test"
+    runs-on: ubuntu-latest
+    needs: resolve-env
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: ims_test
+          POSTGRES_USER: ims_user
+          POSTGRES_PASSWORD: ims_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ims_user"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Java ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+
+      - name: Cache Maven dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      - name: Build and test
+        working-directory: ./backend
+        run: mvn clean verify --no-transfer-progress
+        env:
+          SPRING_PROFILES_ACTIVE: test
+          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/ims_test
+          SPRING_DATASOURCE_USERNAME: ims_user
+          SPRING_DATASOURCE_PASSWORD: ims_password
+
+      - name: Upload JAR artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-jar-${{ github.sha }}
+          path: backend/target/*.jar
+          retention-days: 1
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # JOB 3 — Frontend: Build
+  # ═══════════════════════════════════════════════════════════════════════════
+  frontend-build:
+    name: "Frontend — Build"
+    runs-on: ubuntu-latest
+    needs: resolve-env
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Run lint and tests
+        working-directory: ./frontend
+        run: |
+          npm run lint
+          npm run test -- --run
+
+      - name: Build for production
+        working-directory: ./frontend
+        run: npm run build
+        env:
+          # Uses the API URL resolved for the target environment
+          VITE_API_BASE_URL: ${{ needs.resolve-env.outputs.api_base_url }}
+
+      - name: Upload dist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist-${{ github.sha }}
+          path: frontend/dist/
+          retention-days: 1
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # JOB 4 — Docker: Build & Push Images
+  # Runs after both build jobs succeed
+  # ═══════════════════════════════════════════════════════════════════════════
+  docker-build-push:
+    name: "Docker — Build & Push Images"
+    runs-on: ubuntu-latest
+    needs: [resolve-env, backend-build, frontend-build]
+
+    outputs:
+      image_tag: ${{ steps.meta.outputs.short_sha }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ── Download built artifacts ───────────────────────────────────────────
+      - name: Download backend JAR
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-jar-${{ github.sha }}
+          path: backend/target/
+
+      - name: Download frontend dist
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist-${{ github.sha }}
+          path: frontend/dist/
+
+      # ── Image tag strategy ─────────────────────────────────────────────────
+      # Tags applied:
+      #   - Short commit SHA   → immutable, e.g. abc1234
+      #   - Branch name        → mutable,   e.g. develop / main
+      #   - latest             → only on main branch
+      - name: Compute image tags
+        id: meta
+        run: |
+          SHORT_SHA="${{ github.sha }}"
+          SHORT_SHA="${SHORT_SHA:0:7}"
+          BRANCH="${{ github.ref_name }}"
+
+          echo "short_sha=${SHORT_SHA}" >> $GITHUB_OUTPUT
+          echo "branch=${BRANCH}"       >> $GITHUB_OUTPUT
+
+          # Build tag list for backend
+          TAGS="${{ env.BACKEND_IMAGE }}:${SHORT_SHA}"
+          TAGS="${TAGS},${{ env.BACKEND_IMAGE }}:${BRANCH}"
+          if [[ "$BRANCH" == "main" ]]; then
+            TAGS="${TAGS},${{ env.BACKEND_IMAGE }}:latest"
+          fi
+          echo "backend_tags=${TAGS}" >> $GITHUB_OUTPUT
+
+          # Build tag list for frontend
+          TAGS="${{ env.FRONTEND_IMAGE }}:${SHORT_SHA}"
+          TAGS="${TAGS},${{ env.FRONTEND_IMAGE }}:${BRANCH}"
+          if [[ "$BRANCH" == "main" ]]; then
+            TAGS="${TAGS},${{ env.FRONTEND_IMAGE }}:latest"
+          fi
+          echo "frontend_tags=${TAGS}" >> $GITHUB_OUTPUT
+
+          echo "Image tags computed:"
+          echo "  Backend : ${{ env.BACKEND_IMAGE }}:${SHORT_SHA}, :${BRANCH}"
+          echo "  Frontend: ${{ env.FRONTEND_IMAGE }}:${SHORT_SHA}, :${BRANCH}"
+
+      # ── Login to DockerHub ─────────────────────────────────────────────────
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}   # SECRET: DOCKERHUB_USERNAME
+          password: ${{ secrets.DOCKERHUB_TOKEN }}       # SECRET: DOCKERHUB_TOKEN
+
+      # ── Enable multi-platform builds (amd64 + arm64) ──────────────────────
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # ── Build & push backend image ─────────────────────────────────────────
+      - name: Build and push backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.backend_tags }}
+          platforms: linux/amd64,linux/arm64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ── Build & push frontend image ────────────────────────────────────────
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.frontend_tags }}
+          platforms: linux/amd64,linux/arm64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ── Vulnerability scan ────────────────────────────────────────────────
+      - name: Scan backend image with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.BACKEND_IMAGE }}:${{ steps.meta.outputs.short_sha }}
+          format: table
+          exit-code: 0           # Warn only — change to 1 to block on critical CVEs
+          severity: CRITICAL,HIGH
+
+      - name: Scan frontend image with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.FRONTEND_IMAGE }}:${{ steps.meta.outputs.short_sha }}
+          format: table
+          exit-code: 0
+          severity: CRITICAL,HIGH
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # JOB 5 — Deploy to Staging (develop branch only)
+  # ═══════════════════════════════════════════════════════════════════════════
+  deploy-staging:
+    name: "Deploy → Staging"
+    runs-on: ubuntu-latest
+    needs: [resolve-env, docker-build-push]
+    if: github.ref_name == 'develop'
+    environment: staging   # Maps to GitHub Environment "staging" — create under Repo → Settings → Environments
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to staging server via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.STAGING_SERVER_HOST }}        # SECRET: STAGING_SERVER_HOST
+          username: ${{ secrets.STAGING_SERVER_USER }}    # SECRET: STAGING_SERVER_USER
+          key: ${{ secrets.STAGING_SSH_PRIVATE_KEY }}     # SECRET: STAGING_SSH_PRIVATE_KEY
+          script: |
+            set -e
+
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo " Deploying to STAGING"
+            echo " Image tag : ${{ needs.docker-build-push.outputs.image_tag }}"
+            echo " Commit    : ${{ github.sha }}"
+            echo " By        : ${{ github.actor }}"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+            cd /opt/inventory-app
+
+            # Write the .env file for docker-compose
+            cat > .env << 'ENVEOF'
+            IMAGE_TAG=${{ needs.docker-build-push.outputs.image_tag }}
+            DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
+            DB_URL=${{ secrets.STAGING_DB_URL }}
+            DB_USERNAME=${{ secrets.STAGING_DB_USERNAME }}
+            DB_PASSWORD=${{ secrets.STAGING_DB_PASSWORD }}
+            JWT_SECRET=${{ secrets.STAGING_JWT_SECRET }}
+            SPRING_PROFILES_ACTIVE=staging
+            ENVEOF
+
+            # Pull the new images
+            docker compose pull
+
+            # Rolling restart — backend first, then frontend
+            docker compose up -d --no-deps --remove-orphans backend
+            echo "⏳ Waiting for backend to be healthy..."
+            sleep 15
+            docker compose up -d --no-deps --remove-orphans frontend
+
+            # Health check
+            echo "🔍 Running health check..."
+            for i in {1..12}; do
+              STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/actuator/health || echo "000")
+              if [[ "$STATUS" == "200" ]]; then
+                echo "✅ Backend is healthy (attempt $i)"
+                break
+              fi
+              echo "   Attempt $i/12 — status: $STATUS — retrying in 5s..."
+              sleep 5
+              if [[ $i == 12 ]]; then
+                echo "❌ Health check failed after 12 attempts"
+                exit 1
+              fi
+            done
+
+            echo "✅ Staging deployment complete."
+            docker compose ps
+
+      - name: Notify Slack — Staging Deployed
+        if: always()
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "text": "${{ job.status == 'success' && '✅' || '❌' }} *Staging Deploy* — `${{ github.ref_name }}` @ `${{ needs.docker-build-push.outputs.image_tag }}`\n*By:* ${{ github.actor }}\n*Status:* ${{ job.status }}\n*Commit:* ${{ github.event.head_commit.message }}"
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}    # SECRET: SLACK_WEBHOOK_URL
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # JOB 6 — Deploy to Production (main branch only)
+  #         Requires manual approval via GitHub Environment protection rule
+  # ═══════════════════════════════════════════════════════════════════════════
+  deploy-production:
+    name: "Deploy → Production"
+    runs-on: ubuntu-latest
+    needs: [resolve-env, docker-build-push]
+    if: github.ref_name == 'main'
+    environment: production   # Maps to GitHub Environment "production"
+                              # ⚠️  Set up a Required Reviewer in:
+                              # Repo → Settings → Environments → production → Required reviewers
+                              # This pauses the pipeline and waits for manual approval
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to production server via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.PROD_SERVER_HOST }}        # SECRET: PROD_SERVER_HOST
+          username: ${{ secrets.PROD_SERVER_USER }}    # SECRET: PROD_SERVER_USER
+          key: ${{ secrets.PROD_SSH_PRIVATE_KEY }}     # SECRET: PROD_SSH_PRIVATE_KEY
+          script: |
+            set -e
+
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo " Deploying to PRODUCTION"
+            echo " Image tag : ${{ needs.docker-build-push.outputs.image_tag }}"
+            echo " Commit    : ${{ github.sha }}"
+            echo " By        : ${{ github.actor }}"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+            cd /opt/inventory-app
+
+            # Save current tag for potential rollback
+            CURRENT_TAG=$(grep IMAGE_TAG .env | cut -d= -f2 || echo "unknown")
+            echo "Previous tag: $CURRENT_TAG"
+            echo "$CURRENT_TAG" > .last-deployed-tag
+
+            # Write the .env file for docker-compose
+            cat > .env << 'ENVEOF'
+            IMAGE_TAG=${{ needs.docker-build-push.outputs.image_tag }}
+            DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
+            DB_URL=${{ secrets.PROD_DB_URL }}
+            DB_USERNAME=${{ secrets.PROD_DB_USERNAME }}
+            DB_PASSWORD=${{ secrets.PROD_DB_PASSWORD }}
+            JWT_SECRET=${{ secrets.PROD_JWT_SECRET }}
+            SPRING_PROFILES_ACTIVE=prod
+            ENVEOF
+
+            # Pull the new images
+            docker compose pull
+
+            # Run Flyway migrations before restarting app
+            echo "📦 Running database migrations..."
+            docker compose run --rm backend java -jar app.jar --spring.batch.job.enabled=false flyway:migrate || true
+
+            # Rolling restart
+            docker compose up -d --no-deps --remove-orphans backend
+            echo "⏳ Waiting for backend to be healthy..."
+            sleep 20
+            docker compose up -d --no-deps --remove-orphans frontend
+
+            # Health check with longer timeout for production
+            echo "🔍 Running health check..."
+            for i in {1..18}; do
+              STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/actuator/health || echo "000")
+              if [[ "$STATUS" == "200" ]]; then
+                echo "✅ Backend is healthy (attempt $i)"
+                break
+              fi
+              echo "   Attempt $i/18 — status: $STATUS — retrying in 10s..."
+              sleep 10
+              if [[ $i == 18 ]]; then
+                echo "❌ Health check failed. Consider rolling back to tag: $CURRENT_TAG"
+                exit 1
+              fi
+            done
+
+            echo "✅ Production deployment complete."
+            docker compose ps
+
+      - name: Notify Slack — Production Deployed
+        if: always()
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "text": "${{ job.status == 'success' && '🚀' || '🔥' }} *Production Deploy* — `${{ github.ref_name }}` @ `${{ needs.docker-build-push.outputs.image_tag }}`\n*By:* ${{ github.actor }}\n*Status:* ${{ job.status }}\n*Commit:* ${{ github.event.head_commit.message }}"
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}    # SECRET: SLACK_WEBHOOK_URL
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
