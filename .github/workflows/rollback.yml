@@ -1,0 +1,288 @@
+# name: Rollback Deployment
+
+# # ─────────────────────────────────────────────────────────────────────────────
+# # REQUIRED GITHUB SECRETS — go to: Repo → Settings → Secrets → Actions
+# # ─────────────────────────────────────────────────────────────────────────────
+# #
+# #   DOCKERHUB_USERNAME        → Your DockerHub username
+# #
+# #   PROD_SERVER_HOST          → Production EC2 public IP or domain
+# #
+# #   PROD_SERVER_USER          → SSH username (e.g. ubuntu)
+# #
+# #   PROD_SSH_PRIVATE_KEY      → Full contents of your production .pem key file
+# #
+# #   STAGING_SERVER_HOST       → Staging EC2 public IP or subdomain
+# #
+# #   STAGING_SERVER_USER       → SSH username for staging (e.g. ubuntu)
+# #
+# #   STAGING_SSH_PRIVATE_KEY   → Full contents of your staging .pem key file
+# #
+# #   PROD_DB_URL               → Production database JDBC URL
+# #   PROD_DB_USERNAME          → Production database username
+# #   PROD_DB_PASSWORD          → Production database password
+# #   PROD_JWT_SECRET           → JWT signing secret for production
+# #
+# #   STAGING_DB_URL            → Staging database JDBC URL
+# #   STAGING_DB_USERNAME       → Staging database username
+# #   STAGING_DB_PASSWORD       → Staging database password
+# #   STAGING_JWT_SECRET        → JWT signing secret for staging
+# #
+# #   SLACK_WEBHOOK_URL         → Slack incoming webhook URL for notifications
+# #
+# # ─────────────────────────────────────────────────────────────────────────────
+
+# on:
+#   workflow_dispatch:
+#     # ── Inputs shown in GitHub UI when you click "Run workflow" ───────────────
+#     inputs:
+
+#       environment:
+#         description: "Target environment to roll back"
+#         required: true
+#         type: choice
+#         options:
+#           - staging
+#           - production
+
+#       image_tag:
+#         description: |
+#           Image tag to roll back to.
+#           Use a short commit SHA (e.g. abc1234) or a version tag (e.g. v1.2.0).
+#           Leave blank to roll back to the previous deployment automatically.
+#         required: false
+#         type: string
+#         default: ""
+
+#       reason:
+#         description: "Reason for rollback (shown in Slack notification and deployment log)"
+#         required: true
+#         type: string
+
+# # ─────────────────────────────────────────────────────────────────────────────
+# env:
+#   BACKEND_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/inventory-backend
+#   FRONTEND_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/inventory-frontend
+
+# jobs:
+
+#   # ═══════════════════════════════════════════════════════════════════════════
+#   # JOB 1 — Validate inputs and resolve the rollback tag
+#   # ═══════════════════════════════════════════════════════════════════════════
+#   resolve-rollback:
+#     name: "Resolve Rollback Target"
+#     runs-on: ubuntu-latest
+
+#     outputs:
+#       rollback_tag:  ${{ steps.resolve.outputs.rollback_tag }}
+#       server_host:   ${{ steps.resolve.outputs.server_host }}
+#       server_user:   ${{ steps.resolve.outputs.server_user }}
+
+#     steps:
+#       - name: Resolve target server and rollback tag
+#         id: resolve
+#         run: |
+#           ENV="${{ github.event.inputs.environment }}"
+#           TAG="${{ github.event.inputs.image_tag }}"
+
+#           echo "──────────────────────────────────────────────"
+#           echo "  Rollback Request"
+#           echo "  Environment : $ENV"
+#           echo "  Requested by: ${{ github.actor }}"
+#           echo "  Reason      : ${{ github.event.inputs.reason }}"
+#           echo "  Tag input   : ${TAG:-'(auto — use previous)'}"
+#           echo "──────────────────────────────────────────────"
+
+#           # Set server details based on environment
+#           if [[ "$ENV" == "production" ]]; then
+#             echo "server_host=${{ secrets.PROD_SERVER_HOST }}"   >> $GITHUB_OUTPUT
+#             echo "server_user=${{ secrets.PROD_SERVER_USER }}"   >> $GITHUB_OUTPUT
+#           else
+#             echo "server_host=${{ secrets.STAGING_SERVER_HOST }}" >> $GITHUB_OUTPUT
+#             echo "server_user=${{ secrets.STAGING_SERVER_USER }}" >> $GITHUB_OUTPUT
+#           fi
+
+#           # If no tag provided we fall back to the previous tag stored on the server
+#           # The deploy pipeline saves the previous tag to .last-deployed-tag
+#           if [[ -z "$TAG" ]]; then
+#             echo "rollback_tag=AUTO" >> $GITHUB_OUTPUT
+#             echo "ℹ️  No tag specified — will read .last-deployed-tag from server"
+#           else
+#             echo "rollback_tag=${TAG}" >> $GITHUB_OUTPUT
+#             echo "✅ Will roll back to tag: $TAG"
+#           fi
+
+#   # ═══════════════════════════════════════════════════════════════════════════
+#   # JOB 2 — Verify the target image actually exists in DockerHub
+#   #          Prevents rolling back to a tag that was never pushed
+#   # ═══════════════════════════════════════════════════════════════════════════
+#   verify-image:
+#     name: "Verify Image Exists"
+#     runs-on: ubuntu-latest
+#     needs: resolve-rollback
+#     if: needs.resolve-rollback.outputs.rollback_tag != 'AUTO'
+
+#     steps:
+#       - name: Login to DockerHub
+#         uses: docker/login-action@v3
+#         with:
+#           username: ${{ secrets.DOCKERHUB_USERNAME }}   # SECRET: DOCKERHUB_USERNAME
+#           password: ${{ secrets.DOCKERHUB_TOKEN }}       # SECRET: DOCKERHUB_TOKEN
+
+#       - name: Check backend image tag exists
+#         run: |
+#           TAG="${{ needs.resolve-rollback.outputs.rollback_tag }}"
+#           IMAGE="${{ env.BACKEND_IMAGE }}:${TAG}"
+
+#           echo "🔍 Checking: $IMAGE"
+
+#           if docker manifest inspect "$IMAGE" > /dev/null 2>&1; then
+#             echo "✅ Backend image found: $IMAGE"
+#           else
+#             echo "❌ Backend image not found: $IMAGE"
+#             echo "   Check available tags at: https://hub.docker.com/r/${{ env.BACKEND_IMAGE }}/tags"
+#             exit 1
+#           fi
+
+#       - name: Check frontend image tag exists
+#         run: |
+#           TAG="${{ needs.resolve-rollback.outputs.rollback_tag }}"
+#           IMAGE="${{ env.FRONTEND_IMAGE }}:${TAG}"
+
+#           echo "🔍 Checking: $IMAGE"
+
+#           if docker manifest inspect "$IMAGE" > /dev/null 2>&1; then
+#             echo "✅ Frontend image found: $IMAGE"
+#           else
+#             echo "❌ Frontend image not found: $IMAGE"
+#             exit 1
+#           fi
+
+#   # ═══════════════════════════════════════════════════════════════════════════
+#   # JOB 3 — Execute the rollback
+#   # ═══════════════════════════════════════════════════════════════════════════
+#   execute-rollback:
+#     name: "Execute Rollback → ${{ github.event.inputs.environment }}"
+#     runs-on: ubuntu-latest
+#     needs: [resolve-rollback, verify-image]
+#     # Run even if verify-image was skipped (AUTO mode)
+#     if: always() && needs.resolve-rollback.result == 'success' && (needs.verify-image.result == 'success' || needs.verify-image.result == 'skipped')
+
+#     environment: ${{ github.event.inputs.environment }}
+#     # ⚠️  Production environment has a Required Reviewer — manual approval needed
+#     # Set this up at: Repo → Settings → Environments → production → Required reviewers
+
+#     steps:
+#       - name: Execute rollback via SSH
+#         uses: appleboy/ssh-action@v1.0.3
+#         with:
+#           host: ${{ needs.resolve-rollback.outputs.server_host }}
+#           username: ${{ needs.resolve-rollback.outputs.server_user }}
+#           key: ${{ github.event.inputs.environment == 'production' && secrets.PROD_SSH_PRIVATE_KEY || secrets.STAGING_SSH_PRIVATE_KEY }}
+#           script: |
+#             set -e
+
+#             cd /opt/inventory-app
+
+#             # ── Resolve the tag to roll back to ───────────────────────────────
+#             REQUESTED_TAG="${{ needs.resolve-rollback.outputs.rollback_tag }}"
+
+#             if [[ "$REQUESTED_TAG" == "AUTO" ]]; then
+#               # Read the previous tag saved by the deploy pipeline
+#               if [[ -f .last-deployed-tag ]]; then
+#                 ROLLBACK_TAG=$(cat .last-deployed-tag)
+#                 echo "ℹ️  Auto-resolved rollback tag: $ROLLBACK_TAG"
+#               else
+#                 echo "❌ .last-deployed-tag file not found on server."
+#                 echo "   Please re-run and specify an image tag manually."
+#                 exit 1
+#               fi
+#             else
+#               ROLLBACK_TAG="$REQUESTED_TAG"
+#             fi
+
+#             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+#             echo "  Rolling back ${{ github.event.inputs.environment }}"
+#             echo "  Target tag  : $ROLLBACK_TAG"
+#             echo "  Reason      : ${{ github.event.inputs.reason }}"
+#             echo "  Triggered by: ${{ github.actor }}"
+#             echo "  Time        : $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+#             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+#             # ── Save current tag before we overwrite it ───────────────────────
+#             CURRENT_TAG=$(grep IMAGE_TAG .env 2>/dev/null | cut -d= -f2 || echo "unknown")
+#             echo "Current tag (being replaced): $CURRENT_TAG"
+
+#             # ── Write rollback .env ───────────────────────────────────────────
+#             if [[ "${{ github.event.inputs.environment }}" == "production" ]]; then
+#               cat > .env << 'ENVEOF'
+#             IMAGE_TAG=$ROLLBACK_TAG
+#             DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
+#             DB_URL=${{ secrets.PROD_DB_URL }}
+#             DB_USERNAME=${{ secrets.PROD_DB_USERNAME }}
+#             DB_PASSWORD=${{ secrets.PROD_DB_PASSWORD }}
+#             JWT_SECRET=${{ secrets.PROD_JWT_SECRET }}
+#             SPRING_PROFILES_ACTIVE=prod
+#             ENVEOF
+#             else
+#               cat > .env << 'ENVEOF'
+#             IMAGE_TAG=$ROLLBACK_TAG
+#             DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
+#             DB_URL=${{ secrets.STAGING_DB_URL }}
+#             DB_USERNAME=${{ secrets.STAGING_DB_USERNAME }}
+#             DB_PASSWORD=${{ secrets.STAGING_DB_PASSWORD }}
+#             JWT_SECRET=${{ secrets.STAGING_JWT_SECRET }}
+#             SPRING_PROFILES_ACTIVE=staging
+#             ENVEOF
+#             fi
+
+#             # ── Pull rollback images ───────────────────────────────────────────
+#             echo "📥 Pulling rollback images..."
+#             docker compose pull
+
+#             # ── Rolling restart to rollback version ───────────────────────────
+#             echo "🔄 Restarting services with rollback image..."
+#             docker compose up -d --no-deps --remove-orphans backend
+#             echo "⏳ Waiting for backend to initialise..."
+#             sleep 20
+#             docker compose up -d --no-deps --remove-orphans frontend
+
+#             # ── Health check ──────────────────────────────────────────────────
+#             echo "🔍 Running post-rollback health check..."
+#             for i in {1..18}; do
+#               STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/actuator/health || echo "000")
+#               if [[ "$STATUS" == "200" ]]; then
+#                 echo "✅ Service healthy after rollback (attempt $i)"
+#                 break
+#               fi
+#               echo "   Attempt $i/18 — status: $STATUS — retrying in 10s..."
+#               sleep 10
+#               if [[ $i == 18 ]]; then
+#                 echo "❌ Health check failed after rollback."
+#                 echo "   Manual intervention required on server."
+#                 exit 1
+#               fi
+#             done
+
+#             # ── Log rollback to deployment history ────────────────────────────
+#             mkdir -p /opt/inventory-app/deployment-history
+#             echo "$(date -u '+%Y-%m-%d %H:%M:%S UTC') | ROLLBACK | from=$CURRENT_TAG | to=$ROLLBACK_TAG | by=${{ github.actor }} | reason=${{ github.event.inputs.reason }}" \
+#               >> /opt/inventory-app/deployment-history/history.log
+
+#             echo ""
+#             echo "✅ Rollback complete."
+#             echo "   Environment : ${{ github.event.inputs.environment }}"
+#             echo "   Rolled back : $CURRENT_TAG → $ROLLBACK_TAG"
+#             docker compose ps
+
+#       - name: Notify Slack — Rollback Result
+#         if: always()
+#         uses: slackapi/slack-github-action@v1.26.0
+#         with:
+#           payload: |
+#             {
+#               "text": "${{ job.status == 'success' && '⏪' || '🔥' }} *Rollback ${{ job.status == 'success' && 'Successful' || 'FAILED' }}* — *${{ github.event.inputs.environment }}*\n*Tag:* `${{ needs.resolve-rollback.outputs.rollback_tag }}`\n*Reason:* ${{ github.event.inputs.reason }}\n*By:* ${{ github.actor }}\n*Status:* ${{ job.status }}"
+#             }
+#         env:
+#           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}    # SECRET: SLACK_WEBHOOK_URL
+#           SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK

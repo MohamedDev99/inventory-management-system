@@ -1,0 +1,473 @@
+name: Release — Tag & Publish Versioned Images
+
+# ─────────────────────────────────────────────────────────────────────────────
+# REQUIRED GITHUB SECRETS — go to: Repo → Settings → Secrets → Actions
+# ─────────────────────────────────────────────────────────────────────────────
+#
+#   DOCKERHUB_USERNAME        → Your DockerHub username
+#                               e.g. moeware
+#
+#   DOCKERHUB_TOKEN           → DockerHub access token (NOT your password)
+#                               Get it from: https://hub.docker.com →
+#                               Account Settings → Security → New Access Token
+#
+#   VITE_API_BASE_URL_PROD    → Production API URL used by the frontend build
+#                               e.g. https://api.yourdomain.com
+#
+#   SLACK_WEBHOOK_URL         → Slack incoming webhook URL
+#                               Get it from: https://api.slack.com/apps →
+#                               Your App → Incoming Webhooks → Add New Webhook
+#
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# HOW TO CREATE A RELEASE TAG:
+#
+#   git tag -a v1.2.0 -m "Release v1.2.0 — barcode scanner + bug fixes"
+#   git push origin v1.2.0
+#
+# TAG FORMAT:  v{MAJOR}.{MINOR}.{PATCH}   (Semantic Versioning)
+#   MAJOR → breaking changes
+#   MINOR → new features, backwards compatible
+#   PATCH → bug fixes
+#
+# IMAGES PRODUCED FOR TAG v1.2.0:
+#   username/inventory-backend:v1.2.0      ← exact version (immutable)
+#   username/inventory-backend:v1.2        ← minor version (updated on patch)
+#   username/inventory-backend:v1          ← major version (updated on minor/patch)
+#   username/inventory-backend:latest      ← always the newest release
+#   username/inventory-backend:abc1234     ← short commit SHA (immutable)
+#
+# ─────────────────────────────────────────────────────────────────────────────
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"   # matches v1.0.0, v2.3.14, etc.
+
+env:
+  JAVA_VERSION: "17"
+  NODE_VERSION: "20"
+  BACKEND_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/inventory-backend
+  FRONTEND_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/inventory-frontend
+
+jobs:
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # JOB 1 — Validate the tag format and extract version components
+  # ═══════════════════════════════════════════════════════════════════════════
+  validate-tag:
+    name: "Validate Release Tag"
+    runs-on: ubuntu-latest
+
+    outputs:
+      version:        ${{ steps.parse.outputs.version }}        # e.g. 1.2.0
+      version_tag:    ${{ steps.parse.outputs.version_tag }}    # e.g. v1.2.0
+      major:          ${{ steps.parse.outputs.major }}          # e.g. 1
+      minor:          ${{ steps.parse.outputs.minor }}          # e.g. 2
+      patch:          ${{ steps.parse.outputs.patch }}          # e.g. 0
+      short_sha:      ${{ steps.parse.outputs.short_sha }}      # e.g. abc1234
+      is_prerelease:  ${{ steps.parse.outputs.is_prerelease }}  # true/false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Parse and validate version tag
+        id: parse
+        run: |
+          TAG="${{ github.ref_name }}"
+          echo "Raw tag: $TAG"
+
+          # Strip the leading 'v'
+          VERSION="${TAG#v}"
+
+          # Split into components
+          MAJOR=$(echo "$VERSION" | cut -d. -f1)
+          MINOR=$(echo "$VERSION" | cut -d. -f2)
+          PATCH=$(echo "$VERSION" | cut -d. -f3)
+
+          # Short commit SHA
+          SHORT_SHA="${{ github.sha }}"
+          SHORT_SHA="${SHORT_SHA:0:7}"
+
+          # Detect pre-release (e.g. v1.0.0-beta, v2.0.0-rc.1)
+          IS_PRERELEASE="false"
+          if echo "$VERSION" | grep -qE "[-]"; then
+            IS_PRERELEASE="true"
+          fi
+
+          echo "──────────────────────────────────────────────"
+          echo "  Release Tag Parsed"
+          echo "  Tag         : $TAG"
+          echo "  Version     : $VERSION"
+          echo "  Major       : $MAJOR"
+          echo "  Minor       : $MINOR"
+          echo "  Patch       : $PATCH"
+          echo "  SHA         : $SHORT_SHA"
+          echo "  Pre-release : $IS_PRERELEASE"
+          echo "──────────────────────────────────────────────"
+
+          # Validate components are numeric
+          if ! [[ "$MAJOR" =~ ^[0-9]+$ && "$MINOR" =~ ^[0-9]+$ && "$PATCH" =~ ^[0-9]+$ ]]; then
+            echo "❌ Invalid tag format: $TAG"
+            echo "   Expected: v{number}.{number}.{number}  e.g. v1.2.0"
+            exit 1
+          fi
+
+          echo "version=${VERSION}"         >> $GITHUB_OUTPUT
+          echo "version_tag=${TAG}"         >> $GITHUB_OUTPUT
+          echo "major=${MAJOR}"             >> $GITHUB_OUTPUT
+          echo "minor=${MINOR}"             >> $GITHUB_OUTPUT
+          echo "patch=${PATCH}"             >> $GITHUB_OUTPUT
+          echo "short_sha=${SHORT_SHA}"     >> $GITHUB_OUTPUT
+          echo "is_prerelease=${IS_PRERELEASE}" >> $GITHUB_OUTPUT
+
+          echo "✅ Tag validation passed."
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # JOB 2 — Build and test backend
+  # ═══════════════════════════════════════════════════════════════════════════
+  backend-build:
+    name: "Backend — Build & Test"
+    runs-on: ubuntu-latest
+    needs: validate-tag
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: ims_test
+          POSTGRES_USER: ims_user
+          POSTGRES_PASSWORD: ims_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ims_user"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Java ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+
+      - name: Cache Maven dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      - name: Set project version to release tag
+        working-directory: ./backend
+        run: |
+          mvn versions:set -DnewVersion=${{ needs.validate-tag.outputs.version }} --no-transfer-progress
+          echo "✅ Maven version set to ${{ needs.validate-tag.outputs.version }}"
+
+      - name: Build and run all tests
+        working-directory: ./backend
+        run: mvn clean verify --no-transfer-progress
+        env:
+          SPRING_PROFILES_ACTIVE: test
+          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/ims_test
+          SPRING_DATASOURCE_USERNAME: ims_user
+          SPRING_DATASOURCE_PASSWORD: ims_password
+
+      - name: Upload JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-jar-${{ needs.validate-tag.outputs.version_tag }}
+          path: backend/target/*.jar
+          retention-days: 7   # Keep release artifacts longer than regular builds
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # JOB 3 — Build frontend
+  # ═══════════════════════════════════════════════════════════════════════════
+  frontend-build:
+    name: "Frontend — Build"
+    runs-on: ubuntu-latest
+    needs: validate-tag
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Run lint and tests
+        working-directory: ./frontend
+        run: |
+          npm run lint
+          npm run test -- --run
+
+      - name: Build for production
+        working-directory: ./frontend
+        run: npm run build
+        env:
+          VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL_PROD }}   # SECRET: VITE_API_BASE_URL_PROD
+          VITE_APP_VERSION: ${{ needs.validate-tag.outputs.version }}
+
+      - name: Upload dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist-${{ needs.validate-tag.outputs.version_tag }}
+          path: frontend/dist/
+          retention-days: 7
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # JOB 4 — Build and push versioned Docker images
+  # ═══════════════════════════════════════════════════════════════════════════
+  docker-release:
+    name: "Docker — Build & Push Release Images"
+    runs-on: ubuntu-latest
+    needs: [validate-tag, backend-build, frontend-build]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download backend JAR
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-jar-${{ needs.validate-tag.outputs.version_tag }}
+          path: backend/target/
+
+      - name: Download frontend dist
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist-${{ needs.validate-tag.outputs.version_tag }}
+          path: frontend/dist/
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}   # SECRET: DOCKERHUB_USERNAME
+          password: ${{ secrets.DOCKERHUB_TOKEN }}       # SECRET: DOCKERHUB_TOKEN
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # ── Compute all image tags ─────────────────────────────────────────────
+      # For v1.2.0 we produce:
+      #   :v1.2.0   exact patch  (immutable)
+      #   :v1.2     minor        (points to latest patch of this minor)
+      #   :v1       major        (points to latest minor of this major)
+      #   :latest   global       (only for non-pre-release tags)
+      #   :abc1234  commit SHA   (immutable)
+      - name: Compute versioned image tags
+        id: tags
+        run: |
+          V="${{ needs.validate-tag.outputs.version_tag }}"        # v1.2.0
+          MAJOR="v${{ needs.validate-tag.outputs.major }}"         # v1
+          MINOR="v${{ needs.validate-tag.outputs.major }}.${{ needs.validate-tag.outputs.minor }}"  # v1.2
+          SHA="${{ needs.validate-tag.outputs.short_sha }}"
+          IS_PRE="${{ needs.validate-tag.outputs.is_prerelease }}"
+
+          # Backend tags
+          B_TAGS="${{ env.BACKEND_IMAGE }}:${V}"
+          B_TAGS="${B_TAGS},${{ env.BACKEND_IMAGE }}:${MINOR}"
+          B_TAGS="${B_TAGS},${{ env.BACKEND_IMAGE }}:${MAJOR}"
+          B_TAGS="${B_TAGS},${{ env.BACKEND_IMAGE }}:${SHA}"
+          if [[ "$IS_PRE" == "false" ]]; then
+            B_TAGS="${B_TAGS},${{ env.BACKEND_IMAGE }}:latest"
+          fi
+
+          # Frontend tags
+          F_TAGS="${{ env.FRONTEND_IMAGE }}:${V}"
+          F_TAGS="${F_TAGS},${{ env.FRONTEND_IMAGE }}:${MINOR}"
+          F_TAGS="${F_TAGS},${{ env.FRONTEND_IMAGE }}:${MAJOR}"
+          F_TAGS="${F_TAGS},${{ env.FRONTEND_IMAGE }}:${SHA}"
+          if [[ "$IS_PRE" == "false" ]]; then
+            F_TAGS="${F_TAGS},${{ env.FRONTEND_IMAGE }}:latest"
+          fi
+
+          echo "backend_tags=${B_TAGS}"   >> $GITHUB_OUTPUT
+          echo "frontend_tags=${F_TAGS}"  >> $GITHUB_OUTPUT
+
+          echo "Backend tags : $B_TAGS"
+          echo "Frontend tags: $F_TAGS"
+
+      # ── Build & push backend ───────────────────────────────────────────────
+      - name: Build and push backend release image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          tags: ${{ steps.tags.outputs.backend_tags }}
+          platforms: linux/amd64,linux/arm64
+          # Embed version metadata into the image
+          labels: |
+            org.opencontainers.image.version=${{ needs.validate-tag.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ── Build & push frontend ──────────────────────────────────────────────
+      - name: Build and push frontend release image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: true
+          tags: ${{ steps.tags.outputs.frontend_tags }}
+          platforms: linux/amd64,linux/arm64
+          labels: |
+            org.opencontainers.image.version=${{ needs.validate-tag.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ── Vulnerability scan ─────────────────────────────────────────────────
+      - name: Scan backend release image with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.BACKEND_IMAGE }}:${{ needs.validate-tag.outputs.version_tag }}
+          format: sarif
+          output: trivy-backend.sarif
+          severity: CRITICAL,HIGH
+          exit-code: 0   # Warn only — change to 1 to block releases on CVEs
+
+      - name: Scan frontend release image with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.FRONTEND_IMAGE }}:${{ needs.validate-tag.outputs.version_tag }}
+          format: sarif
+          output: trivy-frontend.sarif
+          severity: CRITICAL,HIGH
+          exit-code: 0
+
+      # ── Upload Trivy results to GitHub Security tab ────────────────────────
+      - name: Upload Trivy backend results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-backend.sarif
+          category: trivy-backend
+
+      - name: Upload Trivy frontend results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-frontend.sarif
+          category: trivy-frontend
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # JOB 5 — Create GitHub Release with changelog and artifacts
+  # ═══════════════════════════════════════════════════════════════════════════
+  create-github-release:
+    name: "Create GitHub Release"
+    runs-on: ubuntu-latest
+    needs: [validate-tag, docker-release]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history to generate changelog
+
+      - name: Download backend JAR for release attachment
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-jar-${{ needs.validate-tag.outputs.version_tag }}
+          path: release-artifacts/
+
+      # ── Auto-generate changelog from commits since last tag ────────────────
+      - name: Generate changelog
+        id: changelog
+        run: |
+          CURRENT_TAG="${{ needs.validate-tag.outputs.version_tag }}"
+
+          # Get the previous tag
+          PREV_TAG=$(git tag --sort=-creatordate | grep -v "$CURRENT_TAG" | head -n1 || echo "")
+
+          echo "Current tag : $CURRENT_TAG"
+          echo "Previous tag: ${PREV_TAG:-'(first release)'}"
+
+          if [[ -z "$PREV_TAG" ]]; then
+            LOG=$(git log --pretty=format:"- %s (%h)" HEAD | head -30)
+          else
+            LOG=$(git log --pretty=format:"- %s (%h)" "${PREV_TAG}..HEAD")
+          fi
+
+          # Categorise commits by conventional commit type
+          FEATURES=$(echo "$LOG"     | grep -E "^- feat"     || echo "")
+          FIXES=$(echo "$LOG"        | grep -E "^- fix"      || echo "")
+          CHORES=$(echo "$LOG"       | grep -E "^- chore|^- ci|^- build|^- refactor" || echo "")
+          DOCS=$(echo "$LOG"         | grep -E "^- docs"     || echo "")
+          BREAKING=$(echo "$LOG"     | grep -Ei "BREAKING"   || echo "")
+
+          # Build changelog markdown
+          CHANGELOG="## What's Changed in $CURRENT_TAG"$'\n\n'
+
+          if [[ -n "$BREAKING" ]]; then
+            CHANGELOG+="### ⚠️ Breaking Changes"$'\n'"$BREAKING"$'\n\n'
+          fi
+          if [[ -n "$FEATURES" ]]; then
+            CHANGELOG+="### ✨ New Features"$'\n'"$FEATURES"$'\n\n'
+          fi
+          if [[ -n "$FIXES" ]]; then
+            CHANGELOG+="### 🐛 Bug Fixes"$'\n'"$FIXES"$'\n\n'
+          fi
+          if [[ -n "$DOCS" ]]; then
+            CHANGELOG+="### 📚 Documentation"$'\n'"$DOCS"$'\n\n'
+          fi
+          if [[ -n "$CHORES" ]]; then
+            CHANGELOG+="### 🔧 Maintenance"$'\n'"$CHORES"$'\n\n'
+          fi
+
+          CHANGELOG+="---"$'\n'
+          CHANGELOG+="**Docker Images:**"$'\n'
+          CHANGELOG+="\`\`\`"$'\n'
+          CHANGELOG+="docker pull ${{ secrets.DOCKERHUB_USERNAME }}/inventory-backend:$CURRENT_TAG"$'\n'
+          CHANGELOG+="docker pull ${{ secrets.DOCKERHUB_USERNAME }}/inventory-frontend:$CURRENT_TAG"$'\n'
+          CHANGELOG+="\`\`\`"$'\n'
+
+          # Save to file (handles multiline for GitHub outputs)
+          echo "$CHANGELOG" > changelog.md
+          cat changelog.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.validate-tag.outputs.version_tag }}
+          name: "MoeWare IMS ${{ needs.validate-tag.outputs.version_tag }}"
+          body_path: changelog.md
+          prerelease: ${{ needs.validate-tag.outputs.is_prerelease == 'true' }}
+          files: |
+            release-artifacts/*.jar
+          generate_release_notes: false   # We use our own changelog above
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}   # Built-in — no need to add manually
+
+      # ── Notify Slack ───────────────────────────────────────────────────────
+      - name: Notify Slack — New Release Published
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "text": "🎉 *New Release Published* — MoeWare IMS `${{ needs.validate-tag.outputs.version_tag }}`\n*By:* ${{ github.actor }}\n*Images:*\n• `${{ secrets.DOCKERHUB_USERNAME }}/inventory-backend:${{ needs.validate-tag.outputs.version_tag }}`\n• `${{ secrets.DOCKERHUB_USERNAME }}/inventory-frontend:${{ needs.validate-tag.outputs.version_tag }}`\n*Release:* ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ needs.validate-tag.outputs.version_tag }}"
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}   # SECRET: SLACK_WEBHOOK_URL
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
