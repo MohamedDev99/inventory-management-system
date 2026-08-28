@@ -1,0 +1,205 @@
+# =============================================================================
+
+# .dockerignore — React Frontend (Vite + TypeScript)
+
+# =============================================================================
+
+# The frontend Dockerfile has two stages:
+
+# Stage 1 (builder): runs "pnpm install" then "pnpm build" → produces /dist
+
+# Stage 2 (nginx): copies only /dist into the Nginx image
+
+#
+
+# The most important exclusion is node_modules/ — it can be 300MB–1GB and
+
+# must NEVER be copied in. The builder stage runs its own "npm ci" inside
+
+# the container, creating a clean, reproducible install from scratch.
+
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+
+# Node modules — THE most critical exclusion
+
+# node_modules/ on your machine is built for your host OS (macOS/Windows).
+
+# The Docker container runs Linux — binary packages (like esbuild, rollup)
+
+# would be the wrong platform and fail. "npm ci" inside the container builds
+
+# the correct Linux-compatible versions automatically.
+
+# Copying it in would also add 300MB–1GB to the build context for no benefit.
+
+# -----------------------------------------------------------------------------
+
+node_modules/ .npm/ .pnpm-store/ .yarn/ .pnp.\*
+
+# -----------------------------------------------------------------------------
+
+# Vite build output
+
+# The builder stage runs "npm run build" inside the container to create /dist.
+
+# Your local /dist folder (if it exists) is stale and should never be used —
+
+# the container always builds fresh.
+
+# -----------------------------------------------------------------------------
+
+dist/ dist-ssr/ build/
+
+# -----------------------------------------------------------------------------
+
+# Vite and TypeScript cache
+
+# These are runtime caches for faster local rebuilds. Irrelevant inside Docker
+
+# since the container always starts from scratch.
+
+# -----------------------------------------------------------------------------
+
+.vite/ .vite-cache/ \*.tsbuildinfo tsconfig.tsbuildinfo
+
+# -----------------------------------------------------------------------------
+
+# Environment and secrets
+
+# CRITICAL: .env files often contain API keys, backend URLs, and feature flags.
+
+# Vite bakes VITE\_\* variables into the bundle at build time — but the source
+
+# .env file itself should never exist inside the image.
+
+# Pass build-time variables via ARG/ENV in the Dockerfile or docker-compose args.
+
+# -----------------------------------------------------------------------------
+
+.env .env.\* \*.env !.env.example
+
+# -----------------------------------------------------------------------------
+
+# Test files and coverage
+
+# Tests run in CI, not in the production Nginx image. Excluding them keeps
+
+# the build context clean and prevents test utilities from accidentally being
+
+# bundled (though Vite tree-shaking would catch most of this anyway).
+
+# -----------------------------------------------------------------------------
+
+**/**tests**/ **/_.test.ts \*\*/_.test.tsx **/\*.spec.ts **/\*.spec.tsx coverage/ .nyc_output/ test-results/ playwright-report/ cypress/
+
+# -----------------------------------------------------------------------------
+
+# Storybook
+
+# Component development environment — not needed in the production build.
+
+# Can be several hundred MB including its own node_modules and build cache.
+
+# -----------------------------------------------------------------------------
+
+.storybook/ storybook-static/
+
+# -----------------------------------------------------------------------------
+
+# IDE and editor files
+
+# -----------------------------------------------------------------------------
+
+# VS Code
+
+.vscode/ \*.code-workspace
+
+# IntelliJ / WebStorm
+
+.idea/ \*.iml
+
+# Generic
+
+_.swp _.swo _~ _.bak
+
+# -----------------------------------------------------------------------------
+
+# OS-generated files
+
+# -----------------------------------------------------------------------------
+
+# macOS
+
+.DS*Store .DS_Store? .*\* .Spotlight-V2 .Trashes
+
+# Windows
+
+Thumbs.db ehthumbs.db Desktop.ini
+
+# -----------------------------------------------------------------------------
+
+# Git
+
+# The full Git history is not needed to serve static files. Can be 50-500MB
+
+# on active projects.
+
+# -----------------------------------------------------------------------------
+
+.git/ .gitignore .gitattributes
+
+# -----------------------------------------------------------------------------
+
+# Docker files themselves
+
+# No need to include build configuration inside the built image.
+
+# -----------------------------------------------------------------------------
+
+Dockerfile Dockerfile._ .dockerignore docker-compose_.yml
+
+# -----------------------------------------------------------------------------
+
+# Logs
+
+# -----------------------------------------------------------------------------
+
+logs/ _.log npm-debug.log_ yarn-debug.log* yarn-error.log* pnpm-debug.log\*
+
+# -----------------------------------------------------------------------------
+
+# Documentation
+
+# README, architecture docs, and design assets don't affect the Nginx server
+
+# or the bundled JS/CSS output.
+
+# -----------------------------------------------------------------------------
+
+_.md README_ docs/ CHANGELOG* LICENSE*
+
+# -----------------------------------------------------------------------------
+
+# DevOps / CI config
+
+# If the frontend lives in a monorepo root, exclude infra files that have
+
+# nothing to do with building the React app.
+
+# -----------------------------------------------------------------------------
+
+.github/ terraform/ ansible/ k8s/ helm/ scripts/
+
+# -----------------------------------------------------------------------------
+
+# Backend (if in same repo)
+
+# Prevents the entire Spring Boot project from being sent to the frontend
+
+# Docker build context.
+
+# -----------------------------------------------------------------------------
+
+backend/ src/main/ src/test/ pom.xml mvnw mvnw.cmd .mvn/
