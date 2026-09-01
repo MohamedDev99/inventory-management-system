@@ -1,139 +1,305 @@
 ##############################################################################
-# locals.tf — Local Values (Computed Variables)
+# variables.tf — Input Variables (Root Module)
 #
-# Locals are like variables, but they're COMPUTED inside Terraform
-# rather than passed in from outside. Use them to:
-#   - Derive values from other variables (avoid repetition)
-#   - Create maps of settings that differ per environment
-#   - Build naming conventions consistently
+# Variables are Terraform's way of making code reusable.
+# Instead of hardcoding "t3.medium" everywhere, you define a variable
+# and pass different values per environment.
 #
-# WORKSPACE PATTERN:
-#   terraform.workspace returns the current workspace name.
-#   We use it to look up the right settings from a map.
-#   This way, one codebase handles dev/staging/prod cleanly.
+# VARIABLE TYPES:
+#   string  — "us-east-1"
+#   number  — 3
+#   bool    — true / false
+#   list    — ["a", "b", "c"]
+#   map     — { key = "value" }
+#   object  — { name = string, count = number }
+#
+# HOW TO OVERRIDE:
+#   1. CLI flag:        terraform apply -var="instance_type=t3.large"
+#   2. .tfvars file:    terraform apply -var-file="prod.tfvars"
+#   3. Environment var: export TF_VAR_instance_type=t3.large
+#   4. Workspace file:  environments/prod/terraform.tfvars (used in this project)
 ##############################################################################
 
-locals {
-  # The current environment name, derived from the Terraform workspace.
-  # `terraform workspace select prod` → local.environment = "prod"
-  # This is the CORE pattern for multi-environment management.
-  environment = terraform.workspace == "default" ? "dev" : terraform.workspace
+# ============================================================================
+# GENERAL CONFIGURATION
+# ============================================================================
 
-  # ===========================================================================
-  # ENVIRONMENT-SPECIFIC OVERRIDES
-  #
-  # This map is the heart of the multi-environment pattern.
-  # Each workspace gets its own set of sane defaults.
-  # Values here OVERRIDE the root variables for that environment.
-  # ===========================================================================
-  env_config = {
-    dev = {
-      # Compute — smallest sizes to save money
-      instance_type         = "t3.micro"
-      min_instances         = 1
-      desired_instances     = 1
-      max_instances         = 2
-      enable_spot_instances = true # Save ~70% on dev servers
+variable "aws_region" {
+  description = "AWS region to deploy all resources. Choose closest to your users."
+  type        = string
+  default     = "us-east-1"
 
-      # Database — minimal, no redundancy needed
-      db_instance_class        = "db.t3.micro"
-      db_multi_az              = false
-      db_backup_retention_days = 1
-      db_deletion_protection   = false
-      db_allocated_storage     = 20
-
-      # Networking — single NAT gateway to save money
-      single_nat_gateway = true
-      enable_nat_gateway = true
-
-      # Tags
-      cost_center = "engineering-dev"
-    }
-
-    staging = {
-      # Compute — close to prod but cheaper
-      instance_type         = "t3.small"
-      min_instances         = 1
-      desired_instances     = 2
-      max_instances         = 3
-      enable_spot_instances = true
-
-      # Database — slightly larger, short backup retention
-      db_instance_class        = "db.t3.small"
-      db_multi_az              = false
-      db_backup_retention_days = 7
-      db_deletion_protection   = false
-      db_allocated_storage     = 20
-
-      # Networking
-      single_nat_gateway = true
-      enable_nat_gateway = true
-
-      # Tags
-      cost_center = "engineering-staging"
-    }
-
-    prod = {
-      # Compute — production-grade sizing
-      instance_type         = "t3.medium"
-      min_instances         = 2   # Always at least 2 for HA
-      desired_instances     = 2
-      max_instances         = 6   # Can handle traffic spikes
-      enable_spot_instances = false # Never use Spot for production — can be terminated
-
-      # Database — high availability, long backups, protected from deletion
-      db_instance_class        = "db.t3.medium"
-      db_multi_az              = true  # Automatic failover to standby
-      db_backup_retention_days = 30    # 30 days of point-in-time recovery
-      db_deletion_protection   = true  # Can't delete without setting this false first
-      db_allocated_storage     = 50
-
-      # Networking — one NAT per AZ for redundancy
-      single_nat_gateway = false
-      enable_nat_gateway = true
-
-      # Tags
-      cost_center = "engineering-prod"
-    }
+  # Validation ensures you don't accidentally deploy to the wrong region.
+  validation {
+    condition     = contains(["us-east-1", "us-west-2", "eu-west-1", "ap-southeast-1"], var.aws_region)
+    error_message = "Region must be one of: us-east-1, us-west-2, eu-west-1, ap-southeast-1."
   }
+}
 
-  # Get the config for the current workspace, fallback to dev if unknown.
-  config = lookup(local.env_config, local.environment, local.env_config["dev"])
+variable "owner_email" {
+  description = "Email of the team/person responsible for this infrastructure. Used in tags."
+  type        = string
+  default     = "devops@moeware.com"
+}
 
-  # ===========================================================================
-  # NAMING CONVENTION
-  #
-  # Consistent naming makes it easy to find resources in AWS Console.
-  # Format: {project}-{environment}-{resource}
-  # Example: moeware-ims-prod-vpc
-  # ===========================================================================
-  name_prefix = "moeware-ims-${local.environment}"
+# ============================================================================
+# NETWORKING
+# ============================================================================
 
-  # Common tags applied to every resource (merged with provider default_tags).
-  # These go on top of the provider-level tags.
-  common_tags = {
-    Environment = local.environment
-    CostCenter  = local.config.cost_center
-    Terraform   = "true"
+variable "vpc_cidr" {
+  description = <<-EOT
+    CIDR block for the VPC. This is the IP address range for the entire network.
+
+    Common choices:
+      - 10.0.0.0/16  → 65,536 IPs (most common for production)
+      - 10.1.0.0/16  → different network for staging
+      - 172.16.0.0/16 → alternative RFC1918 range
+
+    /16 gives you plenty of room to create subnets within.
+  EOT
+  type        = string
+  default     = "10.0.0.0/16"
+
+  validation {
+    condition     = can(cidrhost(var.vpc_cidr, 0))
+    error_message = "vpc_cidr must be a valid CIDR block (e.g., 10.0.0.0/16)."
   }
+}
 
-  # ===========================================================================
-  # RESOLVED VALUES
-  #
-  # Merge user-supplied variables with environment defaults.
-  # Environment config wins over variable defaults, but if the user
-  # explicitly sets a variable via tfvars or CLI, that takes precedence.
-  # ===========================================================================
+variable "availability_zones" {
+  description = <<-EOT
+    List of Availability Zones for multi-AZ deployment.
+    Using 2 AZs provides high availability — if one data center fails,
+    the other keeps your app running.
+    Using 3 AZs is more resilient but costs more.
+  EOT
+  type        = list(string)
+  default     = ["us-east-1a", "us-east-1b"]
+}
 
-  # Effective compute settings
-  effective_instance_type     = local.config.instance_type
-  effective_min_instances     = local.config.min_instances
-  effective_desired_instances = local.config.desired_instances
-  effective_max_instances     = local.config.max_instances
+variable "enable_nat_gateway" {
+  description = <<-EOT
+    Whether to create a NAT Gateway for private subnet internet access.
 
-  # Effective database settings
-  effective_db_instance_class        = local.config.db_instance_class
-  effective_db_multi_az              = local.config.db_multi_az
-  effective_db_backup_retention_days = local.config.db_backup_retention_days
-  effective_db_deletion_protection   = local.config.db_deletion_protection
+    NAT Gateway costs ~$32/month + data transfer.
+    For dev/staging, you might disable this to save money.
+    For production, always enable it (private subnets need internet for updates/Docker pulls).
+  EOT
+  type        = bool
+  default     = true
+}
+
+variable "single_nat_gateway" {
+  description = <<-EOT
+    Use a single NAT Gateway instead of one per AZ.
+
+    true  → cheaper (~$32/month), but single point of failure
+    false → one NAT per AZ (~$64+/month), high availability
+
+    Recommended: true for dev/staging, false for production.
+  EOT
+  type        = bool
+  default     = false
+}
+
+# ============================================================================
+# COMPUTE (EC2 / AUTO SCALING)
+# ============================================================================
+
+variable "instance_type" {
+  description = <<-EOT
+    EC2 instance type for application servers.
+
+    Development:  t3.micro  (2 vCPU, 1GB RAM)  — free tier eligible
+    Staging:      t3.small  (2 vCPU, 2GB RAM)  — ~$15/month
+    Production:   t3.medium (2 vCPU, 4GB RAM)  — ~$30/month
+    High traffic: t3.large  (2 vCPU, 8GB RAM)  — ~$60/month
+
+    t3 instances have "burstable" CPU — good for variable workloads like IMS.
+  EOT
+  type        = string
+  default     = "t3.medium"
+}
+
+variable "min_instances" {
+  description = "Minimum number of EC2 instances in the Auto Scaling Group. Never goes below this."
+  type        = number
+  default     = 1
+
+  validation {
+    condition     = var.min_instances >= 1
+    error_message = "min_instances must be at least 1."
+  }
+}
+
+variable "desired_instances" {
+  description = "Desired number of EC2 instances. Auto Scaling targets this number normally."
+  type        = number
+  default     = 2
+}
+
+variable "max_instances" {
+  description = "Maximum number of EC2 instances. Auto Scaling never exceeds this."
+  type        = number
+  default     = 4
+}
+
+variable "key_pair_name" {
+  description = <<-EOT
+    Name of an existing AWS EC2 Key Pair for SSH access.
+    Create one in AWS Console → EC2 → Key Pairs → Create key pair.
+    Download the .pem file — you can't download it again!
+
+    Set to null to create instances without SSH key (use SSM Session Manager instead).
+  EOT
+  type        = string
+  default     = null
+}
+
+variable "enable_spot_instances" {
+  description = <<-EOT
+    Use EC2 Spot Instances for cost savings (up to 90% cheaper).
+    Spot instances can be terminated with 2-minute notice when AWS needs capacity.
+
+    RECOMMENDED: true for dev/staging (interruptions OK), false for production.
+  EOT
+  type        = bool
+  default     = false
+}
+
+# ============================================================================
+# DATABASE (RDS)
+# ============================================================================
+
+variable "db_instance_class" {
+  description = <<-EOT
+    RDS instance size.
+
+    Development:  db.t3.micro  (2 vCPU, 1GB RAM)  — free tier eligible
+    Staging:      db.t3.small  (2 vCPU, 2GB RAM)
+    Production:   db.t3.medium (2 vCPU, 4GB RAM)  — recommended minimum
+    High load:    db.r6g.large (2 vCPU, 16GB RAM) — memory-optimized for PostgreSQL
+  EOT
+  type        = string
+  default     = "db.t3.medium"
+}
+
+variable "db_name" {
+  description = "Name of the PostgreSQL database to create inside RDS."
+  type        = string
+  default     = "inventory_db"
+}
+
+variable "db_username" {
+  description = "Master username for the RDS instance. Avoid 'admin' or 'postgres' (too guessable)."
+  type        = string
+  default     = "ims_admin"
+  sensitive   = true # Hides value in logs
+}
+
+variable "db_allocated_storage" {
+  description = "Initial storage for RDS in GB. RDS can auto-scale storage up if enabled."
+  type        = number
+  default     = 20
+}
+
+variable "db_max_allocated_storage" {
+  description = "Maximum auto-scaled storage in GB. Set to 0 to disable auto-scaling."
+  type        = number
+  default     = 100
+}
+
+variable "db_multi_az" {
+  description = <<-EOT
+    Enable Multi-AZ deployment for RDS.
+
+    Multi-AZ creates a synchronous standby replica in another AZ.
+    If primary fails, AWS automatically fails over (~1-2 minutes downtime).
+
+    Cost: ~2x the price of single-AZ.
+    RECOMMENDED: false for dev/staging, true for production.
+  EOT
+  type        = bool
+  default     = false
+}
+
+variable "db_backup_retention_days" {
+  description = <<-EOT
+    How many days to keep automated RDS backups.
+    0 = disabled (not recommended for anything with real data).
+    7 = good for dev/staging.
+    30 = recommended for production.
+    Max = 35 days.
+  EOT
+  type        = number
+  default     = 7
+
+  validation {
+    condition     = var.db_backup_retention_days >= 0 && var.db_backup_retention_days <= 35
+    error_message = "db_backup_retention_days must be between 0 and 35."
+  }
+}
+
+variable "db_deletion_protection" {
+  description = <<-EOT
+    Prevent accidental RDS deletion via Terraform or AWS Console.
+
+    When true: `terraform destroy` will FAIL until you set this to false first.
+    This is intentional — it protects production databases from accidents.
+
+    RECOMMENDED: false for dev/staging (allows easy teardown), true for production.
+  EOT
+  type        = bool
+  default     = false
+}
+
+# ============================================================================
+# STORAGE (S3)
+# ============================================================================
+
+variable "s3_bucket_name_prefix" {
+  description = <<-EOT
+    Prefix for S3 bucket names. Full name will be: {prefix}-{environment}-{random_suffix}
+    The random suffix ensures global uniqueness (S3 bucket names are global across all AWS accounts).
+
+    Example: "moeware-ims" → "moeware-ims-prod-a1b2c3"
+  EOT
+  type        = string
+  default     = "moeware-ims"
+}
+
+variable "enable_s3_versioning" {
+  description = "Enable S3 object versioning. Protects against accidental deletions by keeping old versions."
+  type        = bool
+  default     = true
+}
+
+# ============================================================================
+# APPLICATION
+# ============================================================================
+
+variable "app_domain" {
+  description = <<-EOT
+    Domain name for the application (e.g., ims.moeware.com).
+    Used for SSL certificate and Route53 records.
+    Leave empty to skip DNS/SSL configuration.
+  EOT
+  type        = string
+  default     = ""
+}
+
+variable "backend_image_tag" {
+  description = <<-EOT
+    Docker image tag for the backend application.
+    In CI/CD, this gets set to the git commit SHA for traceability.
+    Example: "v1.2.0" or "sha-abc1234"
+  EOT
+  type        = string
+  default     = "latest"
+}
+
+variable "frontend_image_tag" {
+  description = "Docker image tag for the frontend application."
+  type        = string
+  default     = "latest"
 }

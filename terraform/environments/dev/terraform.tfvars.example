@@ -1,0 +1,33 @@
+##############################################################################
+# environments/dev/terraform.tfvars.example
+#
+# Values for the DEVELOPMENT workspace.
+#
+# HOW TO USE:
+#   terraform workspace select dev
+#   terraform apply -var-file="environments/dev/terraform.tfvars"
+#
+# PHILOSOPHY: Dev is cheap. We sacrifice redundancy for cost savings.
+#   - Spot instances (can be interrupted, that's OK in dev)
+#   - Single NAT Gateway (saves $32/month)
+#   - Smallest DB instance (free tier eligible)
+#   - No deletion protection (easy teardown)
+#   - 1-day backup retention
+##############################################################################
+
+# General configuration
+aws_region = "us-east-1"
+owner_email = "devops@moeware.com"
+
+# Networking
+vpc_cidr = "10.0.0.0/16"
+availability_zones = ["us-east-1a", "us-east-1b"]
+enable_nat_gateway = true
+single_nat_gateway = true # Share one NAT Gateway — saves ~$32/month
+
+# Compute
+instance_type = "t3.micro"
+min_instances = 1
+desired_instances = 1
+max_instances = 2
+enable_spot_instances = true # Save ~70% on dev servers
