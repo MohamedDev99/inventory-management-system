@@ -1,0 +1,60 @@
+##############################################################################
+# environments/prod/terraform.tfvars.example
+#
+# Values for the PRODUCTION workspace.
+#
+# HOW TO USE:
+#   terraform workspace select prod
+#   terraform plan  -var-file="environments/prod/terraform.tfvars"
+#   terraform apply -var-file="environments/prod/terraform.tfvars"
+#
+# ⚠️  PRODUCTION CHECKLIST BEFORE APPLY:
+#   [ ] Reviewed terraform plan output carefully
+#   [ ] Team lead approved the changes
+#   [ ] Maintenance window communicated (if disruptive)
+#   [ ] Rollback plan ready
+#   [ ] Monitoring dashboards open
+#
+# PHILOSOPHY: Production prioritizes reliability over cost.
+#   - On-demand instances only (no Spot — can't risk interruption)
+#   - Multi-AZ RDS (automatic failover)
+#   - One NAT per AZ (resilient networking)
+#   - 30-day backup retention
+#   - Deletion protection ON (prevents accidents)
+#   - Larger instance sizes
+##############################################################################
+
+aws_region    = "us-east-1"
+owner_email   = "devops@moeware.com"
+
+# Networking — production uses separate CIDR and redundant NAT
+vpc_cidr           = "10.2.0.0/16"
+availability_zones = ["us-east-1a", "us-east-1b", "us-east-1c"]  # 3 AZs for production
+enable_nat_gateway = true
+single_nat_gateway = false  # One NAT per AZ for high availability (~$64/month extra)
+
+# Compute — production-grade sizing
+instance_type         = "t3.medium"
+min_instances         = 2     # Always 2+ instances for zero-downtime deployments
+desired_instances     = 2
+max_instances         = 6     # Scale up to handle traffic spikes
+enable_spot_instances = false # NEVER Spot in production
+
+# Database — fully redundant
+db_instance_class        = "db.t3.medium"
+db_name                  = "inventory_db"
+db_username              = "ims_admin"
+db_allocated_storage     = 50
+db_max_allocated_storage = 500  # Auto-scale up to 500GB before manual intervention
+db_multi_az              = true  # Automatic failover standby replica
+db_backup_retention_days = 30    # 30 days point-in-time recovery
+db_deletion_protection   = true  # CANNOT delete without first setting this to false
+
+# Storage
+s3_bucket_name_prefix = "moeware-ims"
+enable_s3_versioning  = true
+
+# Application — production uses pinned tags, never "latest"
+# These get overridden by CI/CD with the specific commit SHA being deployed
+backend_image_tag  = "v1.0.0"
+frontend_image_tag = "v1.0.0"
