@@ -1,0 +1,14 @@
+---
+# roles/nginx/defaults/main.yml
+
+nginx_ssl_enabled: false # overridden to true in prod/staging group_vars
+nginx_ssl_cert_path: "/etc/letsencrypt/live/{{ nginx_server_name }}/fullchain.pem"
+nginx_ssl_key_path: "/etc/letsencrypt/live/{{ nginx_server_name }}/privkey.pem"
+
+nginx_client_max_body_size: "20m" # max upload size
+nginx_worker_processes: auto
+nginx_worker_connections: 1024
+
+# Rate limiting — requests per second per IP
+nginx_rate_limit: "10r/s"
+nginx_rate_limit_burst: 20

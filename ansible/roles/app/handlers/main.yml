@@ -1,0 +1,8 @@
+---
+# roles/app/handlers/main.yml
+
+- name: Restart app containers
+  community.docker.docker_compose_v2:
+    project_src: "{{ app_dir }}"
+    state: present
+    recreate: always
