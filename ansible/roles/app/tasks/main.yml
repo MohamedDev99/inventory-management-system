@@ -1,0 +1,98 @@
+---
+# roles/app/tasks/main.yml
+# Deploy the MoeWare IMS application using Docker Compose
+
+# ── 1. Create app directory ───────────────────────────────────
+- name: Create app directory
+  ansible.builtin.file:
+    path: "{{ app_dir }}"
+    state: directory
+    owner: "{{ app_user }}"
+    group: "{{ app_user }}"
+    mode: "0755"
+
+- name: Create app log directory
+  ansible.builtin.file:
+    path: "/var/log/{{ app_name }}"
+    state: directory
+    owner: "{{ app_user }}"
+    group: "{{ app_user }}"
+    mode: "0755"
+
+# ── 2. Login to DockerHub (private images) ───────────────────
+- name: Login to DockerHub
+  community.docker.docker_login:
+    username: "{{ vault_dockerhub_username }}"
+    password: "{{ vault_dockerhub_password }}"
+  no_log: true # never print credentials to output
+
+# ── 3. Template .env file with secrets ───────────────────────
+- name: Template .env file
+  ansible.builtin.template:
+    src: env.j2
+    dest: "{{ app_dir }}/.env"
+    owner: "{{ app_user }}"
+    group: "{{ app_user }}"
+    mode: "0600" # secrets — owner read-only
+  no_log: true
+
+# ── 4. Template docker-compose.yml ───────────────────────────
+- name: Template docker-compose.yml
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ app_dir }}/docker-compose.yml"
+    owner: "{{ app_user }}"
+    group: "{{ app_user }}"
+    mode: "0644"
+  notify: Restart app containers
+
+# ── 5. Pull latest images ─────────────────────────────────────
+- name: Pull backend Docker image
+  community.docker.docker_image:
+    name: "{{ backend_image }}:{{ backend_image_tag }}"
+    source: pull
+    force_source: true
+
+- name: Pull frontend Docker image
+  community.docker.docker_image:
+    name: "{{ frontend_image }}:{{ frontend_image_tag }}"
+    source: pull
+    force_source: true
+
+# ── 6. Run database migrations ───────────────────────────────
+- name: Run Flyway database migrations
+  ansible.builtin.command:
+    cmd: >
+      docker compose -f {{ app_dir }}/docker-compose.yml
+      run --rm backend
+      java -jar /app/app.jar --spring.flyway.enabled=true --spring.main.web-application-type=none
+    chdir: "{{ app_dir }}"
+  register: migration_result
+  changed_when: "'Successfully applied' in migration_result.stdout"
+  failed_when: migration_result.rc != 0
+
+- name: Show migration output
+  ansible.builtin.debug:
+    var: migration_result.stdout_lines
+  when: migration_result.stdout_lines is defined
+
+# ── 7. Start / rolling restart containers ────────────────────
+- name: Start app containers
+  community.docker.docker_compose_v2:
+    project_src: "{{ app_dir }}"
+    state: present
+    pull: always
+
+# ── 8. Health check ──────────────────────────────────────────
+- name: Wait for backend to be healthy
+  ansible.builtin.uri:
+    url: "http://localhost:{{ backend_port }}/actuator/health"
+    return_content: true
+  register: health_check
+  until: health_check.status == 200 and 'UP' in health_check.content
+  retries: "{{ health_check_retries }}"
+  delay: "{{ health_check_delay }}"
+
+- name: Confirm deployment
+  ansible.builtin.debug:
+    msg: "✓ MoeWare IMS deployed successfully on {{ env | upper }} — backend is healthy"

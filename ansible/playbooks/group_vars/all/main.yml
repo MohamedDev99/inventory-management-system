@@ -1,0 +1,42 @@
+---
+# ─────────────────────────────────────────────────────────────
+#  group_vars/all/main.yml
+#  Variables available to EVERY host in EVERY inventory
+# ─────────────────────────────────────────────────────────────
+
+# ── Application metadata ─────────────────────────────────────
+app_name: moeware-ims
+app_user: deploy           # non-root OS user that runs the app
+app_dir: /opt/moeware-ims  # where docker-compose.yml lives on the server
+
+# ── Docker image names (tags come from environment group_vars) ─
+backend_image: "moeware/ims-backend"
+frontend_image: "moeware/ims-frontend"
+
+# ── Ports ───────────────────────────────────────────────────
+backend_port: 8080
+frontend_port: 80
+
+# ── Nginx ───────────────────────────────────────────────────
+nginx_server_name: "{{ ansible_host }}"   # overridden in prod/staging
+
+# ── System packages installed by the common role ─────────────
+common_packages:
+  - curl
+  - wget
+  - git
+  - vim
+  - htop
+  - unzip
+  - ufw
+  - fail2ban
+  - python3-pip
+  - ca-certificates
+  - gnupg
+  - lsb-release
+
+# ── Timezone ─────────────────────────────────────────────────
+server_timezone: UTC
+
+# ── Swap size (0 = no swap) ──────────────────────────────────
+swap_size_mb: 2048

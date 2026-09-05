@@ -1,0 +1,71 @@
+---
+# ─────────────────────────────────────────────────────────────
+#  rollback.yml — Roll back to a specific image version
+#
+#  Usage:
+#    ansible-playbook -i inventory/prod playbooks/rollback.yml \
+#      --vault-password-file ~/.vault_pass.txt \
+#      --extra-vars "rollback_tag=1.1.5"
+# ─────────────────────────────────────────────────────────────
+
+- name: Rollback MoeWare IMS to previous version
+  hosts: webservers
+  become: true
+
+  vars:
+    rollback_tag: ""   # must be supplied via --extra-vars
+
+  pre_tasks:
+    - name: Ensure rollback_tag was provided
+      ansible.builtin.fail:
+        msg: "You must provide --extra-vars 'rollback_tag=<version>'"
+      when: rollback_tag == ""
+
+    - name: Rollback warning
+      ansible.builtin.debug:
+        msg: >
+          ROLLING BACK {{ env | upper }} to version {{ rollback_tag }}
+          on host {{ inventory_hostname }}
+
+  tasks:
+    - name: Set rollback image tags
+      ansible.builtin.set_fact:
+        backend_image_tag: "{{ rollback_tag }}"
+        frontend_image_tag: "{{ rollback_tag }}"
+
+    - name: Pull rollback images
+      community.docker.docker_image:
+        name: "{{ item }}:{{ rollback_tag }}"
+        source: pull
+        force_source: true
+      loop:
+        - "{{ backend_image }}"
+        - "{{ frontend_image }}"
+
+    - name: Template docker-compose.yml with rollback tags
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../roles/app/templates/docker-compose.yml.j2"
+        dest: "{{ app_dir }}/docker-compose.yml"
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: "0644"
+
+    - name: Restart containers with rollback images
+      community.docker.docker_compose_v2:
+        project_src: "{{ app_dir }}"
+        state: present
+        recreate: always
+
+    - name: Wait for backend health after rollback
+      ansible.builtin.uri:
+        url: "http://localhost:{{ backend_port }}/actuator/health"
+        return_content: true
+      register: health_check
+      until: health_check.status == 200 and 'UP' in health_check.content
+      retries: 10
+      delay: 5
+
+  post_tasks:
+    - name: Rollback confirmed
+      ansible.builtin.debug:
+        msg: "✓ Rollback complete — {{ env | upper }} now running version {{ rollback_tag }}"

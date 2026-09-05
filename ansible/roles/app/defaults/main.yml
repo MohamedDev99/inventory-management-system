@@ -1,0 +1,9 @@
+---
+# roles/app/defaults/main.yml
+
+backend_image_tag: "latest"
+frontend_image_tag: "latest"
+
+# How long to wait for containers to be healthy before declaring failure
+health_check_retries: 10
+health_check_delay: 5   # seconds between retries

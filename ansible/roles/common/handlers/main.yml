@@ -1,0 +1,19 @@
+---
+# roles/common/handlers/main.yml
+# Handlers only fire when notified, and only once at the end of a play
+
+- name: Restart sshd
+  ansible.builtin.systemd:
+    name: sshd
+    state: restarted
+
+- name: Restart fail2ban
+  ansible.builtin.systemd:
+    name: fail2ban
+    state: restarted
+
+- name: Reboot if kernel updated
+  ansible.builtin.reboot:
+    msg: "Rebooting after kernel upgrade"
+    reboot_timeout: 300
+  when: apt_upgrade.changed
