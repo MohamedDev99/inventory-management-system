@@ -1,0 +1,87 @@
+# =============================================================================
+# values-prod.yaml — Production environment overrides
+# =============================================================================
+# Production values: higher replicas, stricter limits, real TLS.
+#
+# Usage:
+#   helm upgrade --install moeware ./inventory-chart \
+#     -f values-prod.yaml \
+#     --namespace inventory-app \
+#     --set backend.image.tag=$GIT_SHA \
+#     --set frontend.image.tag=$GIT_SHA
+# =============================================================================
+
+global:
+  namespace: inventory-app
+  environment: production
+  domain: moeware.com
+
+backend:
+  replicaCount: 3 # 3 replicas for production HA
+  image:
+    pullPolicy: Always
+  config:
+    springProfilesActive: "prod"
+    logLevel: "WARN" # Less noise in production
+    logLevelSql: "WARN"
+    dbPoolMaxSize: "30" # Larger pool for production load
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "768Mi"
+    limits:
+      cpu: "2000m"
+      memory: "2Gi"
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 15
+  probes:
+    liveness:
+      initialDelaySeconds: 60
+      periodSeconds: 30
+      failureThreshold: 3
+    readiness:
+      initialDelaySeconds: 30
+      periodSeconds: 10
+      failureThreshold: 3
+
+frontend:
+  replicaCount: 3
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 8
+
+postgresql:
+  # In production, strongly consider using AWS RDS instead:
+  # postgresql:
+  #   enabled: false
+  #   external:
+  #     host: "your-rds-endpoint.us-east-1.rds.amazonaws.com"
+  persistence:
+    size: "100Gi"
+    # storageClass: "gp3"          # Faster than gp2 on AWS EKS
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "2000m"
+      memory: "4Gi"
+
+ingress:
+  host: moeware.com
+  apiHost: api.moeware.com
+  tls:
+    enabled: true
+    certManagerIssuer: "letsencrypt-prod"
+  annotations:
+    nginx.ingress.kubernetes.io/limit-rps: "200" # Higher limit for prod
+
+resourceQuota:
+  pods: "100"
+  requestsCpu: "20"
+  limitsCpu: "40"
+  requestsMemory: "20Gi"
+  limitsMemory: "40Gi"

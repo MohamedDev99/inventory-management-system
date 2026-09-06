@@ -1,0 +1,184 @@
+# =============================================================================
+# values.yaml — Default Helm values
+# =============================================================================
+# This file defines ALL configurable parameters with sensible defaults.
+# Override specific values for each environment:
+#
+#   helm install moeware ./inventory-chart                  # uses defaults
+#   helm install moeware ./inventory-chart -f values-dev.yaml   # override dev
+#   helm install moeware ./inventory-chart -f values-prod.yaml  # override prod
+#
+# Access values in templates with: {{ .Values.backend.image.tag }}
+# =============================================================================
+
+# ------------------------------------------------------------------
+# Global settings shared by all components
+# ------------------------------------------------------------------
+global:
+  imageRegistry: "docker.io" # Change to your ECR/GCR registry
+  imagePullSecrets:
+    - name: regcred
+  namespace: inventory-app
+  environment: production
+  domain: moeware.com
+
+# ------------------------------------------------------------------
+# Backend (Spring Boot)
+# ------------------------------------------------------------------
+backend:
+  enabled: true
+
+  image:
+    repository: yourdockerhub/inventory-backend
+    tag: "latest" # Override in CI/CD with actual commit SHA
+    pullPolicy: Always
+
+  replicaCount: 2
+
+  service:
+    type: ClusterIP
+    port: 8080
+
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "512Mi"
+    limits:
+      cpu: "1000m"
+      memory: "1Gi"
+
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+  # Environment-specific config (non-secret)
+  config:
+    springProfilesActive: "prod"
+    jwtExpiration: "3600000"
+    logLevel: "INFO"
+    dbPoolMaxSize: "20"
+
+  # Liveness/readiness probe settings
+  probes:
+    liveness:
+      path: /actuator/health/liveness
+      initialDelaySeconds: 60
+      periodSeconds: 30
+    readiness:
+      path: /actuator/health/readiness
+      initialDelaySeconds: 30
+      periodSeconds: 10
+
+# ------------------------------------------------------------------
+# Frontend (React + Nginx)
+# ------------------------------------------------------------------
+frontend:
+  enabled: true
+
+  image:
+    repository: yourdockerhub/inventory-frontend
+    tag: "latest"
+    pullPolicy: Always
+
+  replicaCount: 2
+
+  service:
+    type: ClusterIP
+    port: 80
+
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "256Mi"
+
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+
+# ------------------------------------------------------------------
+# PostgreSQL
+# ------------------------------------------------------------------
+postgresql:
+  enabled: true # Set to false if using external RDS
+
+  image:
+    repository: postgres
+    tag: "15-alpine"
+    pullPolicy: IfNotPresent
+
+  persistence:
+    enabled: true
+    size: "20Gi"
+    # storageClass: "gp2"           # AWS EBS; uncomment for EKS
+
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "512Mi"
+    limits:
+      cpu: "1000m"
+      memory: "2Gi"
+
+  # Used only when postgresql.enabled=false (external DB)
+  external:
+    host: ""
+    port: 5432
+    database: "inventory_db"
+
+# ------------------------------------------------------------------
+# Ingress
+# ------------------------------------------------------------------
+ingress:
+  enabled: true
+  className: "nginx"
+  host: moeware.com
+  apiHost: api.moeware.com
+
+  tls:
+    enabled: true
+    certManagerIssuer: "letsencrypt-prod"
+    secretName: "moeware-tls"
+
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/limit-rps: "100"
+
+# ------------------------------------------------------------------
+# CronJobs
+# ------------------------------------------------------------------
+cronjobs:
+  stockValuation:
+    enabled: true
+    schedule: "0 2 * * *"
+
+  lowStockCheck:
+    enabled: true
+    schedule: "0 * * * *"
+
+  databaseBackup:
+    enabled: true
+    schedule: "0 3 * * *"
+
+  monthlyReconciliation:
+    enabled: true
+    schedule: "0 1 1 * *"
+
+# ------------------------------------------------------------------
+# Resource Quotas
+# ------------------------------------------------------------------
+resourceQuota:
+  enabled: true
+  pods: "50"
+  requestsCpu: "8"
+  limitsCpu: "16"
+  requestsMemory: "8Gi"
+  limitsMemory: "16Gi"
