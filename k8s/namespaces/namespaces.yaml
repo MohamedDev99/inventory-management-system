@@ -1,0 +1,38 @@
+# =============================================================================
+# Namespaces - Virtual clusters inside the cluster
+# =============================================================================
+# We use separate namespaces to isolate environments.
+# Production runs in 'inventory-app', monitoring in 'monitoring'.
+# This means a pod in 'inventory-app' can't accidentally talk to a pod
+# in another team's namespace without explicit network policies.
+# =============================================================================
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: inventory-app
+  labels:
+    app: moeware
+    environment: production
+    managed-by: kubectl
+
+---
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: inventory-staging
+  labels:
+    app: moeware
+    environment: staging
+    managed-by: kubectl
+
+---
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+  labels:
+    app: monitoring
+    managed-by: helm
