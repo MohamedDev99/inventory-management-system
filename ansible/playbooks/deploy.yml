@@ -1,0 +1,45 @@
+---
+# ─────────────────────────────────────────────────────────────
+#  deploy.yml — Application-only deployment
+#
+#  Skips common + docker (already set up).
+#  Only updates Nginx config + redeploys app containers.
+#
+#  Used by the CI/CD pipeline on every merge to main.
+#
+#  Usage:
+#    ansible-playbook -i inventory/prod playbooks/deploy.yml \
+#      --vault-password-file ~/.vault_pass.txt \
+#      --extra-vars "backend_image_tag=1.2.3 frontend_image_tag=1.2.3"
+# ─────────────────────────────────────────────────────────────
+
+- name: Deploy MoeWare IMS application
+  hosts: webservers
+  become: true
+
+  vars_prompt:
+    - name: confirm_deploy
+      prompt: "Deploy {{ backend_image }}:{{ backend_image_tag }} to {{ env | upper }}? (yes/no)"
+      private: false
+  # Remove vars_prompt block in CI (add --extra-vars "confirm_deploy=yes")
+
+  pre_tasks:
+    - name: Abort if not confirmed
+      ansible.builtin.fail:
+        msg: "Deployment cancelled by user"
+      when: confirm_deploy != "yes"
+
+    - name: Print deploy info
+      ansible.builtin.debug:
+        msg: >
+          Deploying backend={{ backend_image_tag }}  frontend={{ frontend_image_tag }}
+          to {{ inventory_hostname }} ({{ env | upper }})
+
+  roles:
+    - role: nginx   # re-apply Nginx config in case it changed
+    - role: app     # pull new images, run migrations, rolling restart
+
+  post_tasks:
+    - name: Confirm successful deployment
+      ansible.builtin.debug:
+        msg: "✓ Deploy complete — {{ env | upper }} running backend:{{ backend_image_tag }}"

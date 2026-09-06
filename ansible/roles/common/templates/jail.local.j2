@@ -1,0 +1,20 @@
+# Managed by Ansible — do not edit manually
+# Template: roles/common/templates/jail.local.j2
+
+[DEFAULT]
+# Ban IPs for this many seconds
+bantime  = {{ fail2ban_bantime }}
+# Find window — count failures within this period
+findtime = 600
+# Max failed attempts before ban
+maxretry = {{ fail2ban_maxretry }}
+# Email alerts (optional)
+# destemail = admin@moeware.com
+
+[sshd]
+enabled = true
+port    = {{ ssh_port }}
+filter  = sshd
+logpath = /var/log/auth.log
+maxretry = 3
+bantime  = 86400   # 24h for SSH brute force

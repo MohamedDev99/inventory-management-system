@@ -1,0 +1,11 @@
+---
+# roles/docker/defaults/main.yml
+
+docker_compose_version: "2.24.0"
+docker_users:
+  - "{{ deploy_user }}" # add deploy user to docker group
+
+# Docker daemon config
+docker_log_driver: "json-file"
+docker_log_max_size: "10m"
+docker_log_max_file: "3"

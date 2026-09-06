@@ -1,0 +1,14 @@
+---
+# group_vars/staging/main.yml
+
+backend_image_tag: "latest"
+frontend_image_tag: "latest"
+
+nginx_server_name: "staging.moeware.com"
+nginx_ssl_enabled: true
+
+log_level: "DEBUG"
+backend_replicas: 1
+
+db_port: 5432
+db_name: moeware_staging

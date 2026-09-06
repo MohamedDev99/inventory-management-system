@@ -1,0 +1,50 @@
+# Managed by Ansible — do not edit manually
+# Template: roles/app/templates/docker-compose.yml.j2
+
+services:
+
+  backend:
+    image: "{{ backend_image }}:{{ backend_image_tag }}"
+    container_name: moeware-backend
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "127.0.0.1:{{ backend_port }}:8080"   # bind to localhost only — Nginx proxies
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - app-network
+
+  frontend:
+    image: "{{ frontend_image }}:{{ frontend_image_tag }}"
+    container_name: moeware-frontend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:80"   # bind to localhost only — Nginx proxies
+    environment:
+      - VITE_API_URL=https://{{ nginx_server_name }}/api/v1
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge

@@ -1,0 +1,30 @@
+---
+# ─────────────────────────────────────────────────────────────
+#  group_vars/prod/vault.yml
+#
+#  This file is ENCRYPTED with ansible-vault before committing.
+#
+#  To encrypt:   ansible-vault encrypt group_vars/prod/vault.yml
+#  To edit:      ansible-vault edit   group_vars/prod/vault.yml
+#  To decrypt:   ansible-vault decrypt group_vars/prod/vault.yml
+#  To view:      ansible-vault view   group_vars/prod/vault.yml
+#
+#  Run playbooks with:
+#    ansible-playbook site.yml --ask-vault-pass
+#    # OR store password in a file (add to .gitignore):
+#    ansible-playbook site.yml --vault-password-file ~/.vault_pass.txt
+# ─────────────────────────────────────────────────────────────
+
+# Naming convention: vault_ prefix makes it obvious these are vault vars
+vault_db_host: "your-rds-endpoint.rds.amazonaws.com"
+vault_db_user: "moeware_prod"
+vault_db_password: "CHANGE_ME_STRONG_PASSWORD"
+
+vault_jwt_secret: "CHANGE_ME_VERY_LONG_RANDOM_STRING"
+
+vault_dockerhub_username: "your_dockerhub_username"
+vault_dockerhub_password: "your_dockerhub_access_token"
+
+vault_aws_access_key: "AKIAIOSFODNN7EXAMPLE"
+vault_aws_secret_key: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+vault_s3_bucket: "moeware-prod-uploads"

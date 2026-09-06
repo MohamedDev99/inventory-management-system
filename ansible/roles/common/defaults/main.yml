@@ -1,0 +1,21 @@
+---
+# roles/common/defaults/main.yml
+# Lowest-priority defaults — any group_var or host_var overrides these
+
+deploy_user: deploy
+deploy_group: deploy
+deploy_user_shell: /bin/bash
+
+ssh_port: 22
+sshd_permit_root_login: "no"
+sshd_password_authentication: "no"
+
+ufw_allow_ports:
+  - "{{ ssh_port }}"
+  - "80"
+  - "443"
+
+fail2ban_maxretry: 5
+fail2ban_bantime: 3600   # seconds
+
+swap_size_mb: 2048

@@ -1,0 +1,71 @@
+---
+# roles/nginx/tasks/main.yml
+
+# ── 1. Install Nginx ─────────────────────────────────────────
+- name: Install Nginx
+  ansible.builtin.apt:
+    name: nginx
+    state: present
+    update_cache: true
+
+# ── 2. Install Certbot (for SSL) ─────────────────────────────
+- name: Install Certbot and Nginx plugin
+  ansible.builtin.apt:
+    name:
+      - certbot
+      - python3-certbot-nginx
+    state: present
+  when: nginx_ssl_enabled
+
+# ── 3. Remove default Nginx site ─────────────────────────────
+- name: Remove default Nginx site
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  notify: Reload Nginx
+
+# ── 4. Deploy Nginx main config ──────────────────────────────
+- name: Template nginx.conf
+  ansible.builtin.template:
+    src: nginx.conf.j2
+    dest: /etc/nginx/nginx.conf
+    owner: root
+    group: root
+    mode: "0644"
+    validate: nginx -t -c %s
+  notify: Reload Nginx
+
+# ── 5. Deploy app virtual host ───────────────────────────────
+- name: Template moeware-ims site config
+  ansible.builtin.template:
+    src: moeware-ims.conf.j2
+    dest: /etc/nginx/sites-available/moeware-ims
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload Nginx
+
+- name: Enable moeware-ims site
+  ansible.builtin.file:
+    src: /etc/nginx/sites-available/moeware-ims
+    dest: /etc/nginx/sites-enabled/moeware-ims
+    state: link
+  notify: Reload Nginx
+
+# ── 6. Enable and start Nginx ────────────────────────────────
+- name: Enable and start Nginx
+  ansible.builtin.systemd:
+    name: nginx
+    enabled: true
+    state: started
+
+# ── 7. Configure SSL cert auto-renewal ───────────────────────
+- name: Set up Certbot auto-renewal cron
+  ansible.builtin.cron:
+    name: "Certbot SSL renewal"
+    minute: "0"
+    hour: "3"
+    day: "*/12"
+    job: "certbot renew --quiet --nginx && systemctl reload nginx"
+    user: root
+  when: nginx_ssl_enabled

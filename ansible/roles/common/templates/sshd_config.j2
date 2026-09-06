@@ -1,0 +1,38 @@
+# Managed by Ansible — do not edit manually
+# Template: roles/common/templates/sshd_config.j2
+
+Port {{ ssh_port }}
+Protocol 2
+
+# ── Authentication ────────────────────────────────────────────
+PermitRootLogin {{ sshd_permit_root_login }}
+PasswordAuthentication {{ sshd_password_authentication }}
+PubkeyAuthentication yes
+AuthorizedKeysFile .ssh/authorized_keys
+
+# ── Session limits ────────────────────────────────────────────
+MaxAuthTries 3
+MaxSessions 10
+LoginGraceTime 30
+
+# ── Disable unused features ───────────────────────────────────
+X11Forwarding no
+AllowAgentForwarding no
+AllowTcpForwarding no
+PermitEmptyPasswords no
+ChallengeResponseAuthentication no
+UsePAM yes
+
+# ── Keepalive ─────────────────────────────────────────────────
+ClientAliveInterval 120
+ClientAliveCountMax 3
+
+# ── Logging ───────────────────────────────────────────────────
+SyslogFacility AUTH
+LogLevel VERBOSE
+
+# ── Allowed users (only deploy user) ──────────────────────────
+AllowUsers {{ deploy_user }}
+
+AcceptEnv LANG LC_*
+Subsystem sftp /usr/lib/openssh/sftp-server

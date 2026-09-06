@@ -1,0 +1,24 @@
+---
+# ─────────────────────────────────────────────────────────────
+#  group_vars/prod/main.yml
+#  Non-secret production overrides
+#  Secrets live in group_vars/prod/vault.yml (ansible-vault encrypted)
+# ─────────────────────────────────────────────────────────────
+
+# Image tags for prod (pinned, not 'latest')
+backend_image_tag: "1.0.0"
+frontend_image_tag: "1.0.0"
+
+# Nginx: real domain name
+nginx_server_name: "api.moeware.com"
+nginx_ssl_enabled: true
+
+# Log level
+log_level: "INFO"
+
+# Replicas / scaling hints (used in docker-compose template)
+backend_replicas: 2
+
+# Database: points to AWS RDS (host comes from vault.yml)
+db_port: 5432
+db_name: moeware_prod

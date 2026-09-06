@@ -1,0 +1,15 @@
+# Managed by Ansible
+# Template: roles/common/templates/logrotate-app.j2
+
+/var/log/{{ app_name }}/*.log {
+    daily
+    missingok
+    rotate 14
+    compress
+    delaycompress
+    notifempty
+    sharedscripts
+    postrotate
+        docker-compose -f {{ app_dir }}/docker-compose.yml kill -s USR1 backend 2>/dev/null || true
+    endscript
+}
