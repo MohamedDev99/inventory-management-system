@@ -1,0 +1,159 @@
+# =============================================================================
+# HorizontalPodAutoscaler (HPA)
+# =============================================================================
+# HPA automatically scales pod replicas up/down based on metrics.
+# It queries the Metrics Server (or Prometheus via custom metrics) and
+# adjusts the Deployment's replica count.
+#
+# Install Metrics Server (required for CPU/memory HPA):
+#   kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+#
+# How it works:
+#   Current replicas: 2, CPU usage: 80%
+#   Target CPU: 60%
+#   Desired replicas = ceil(2 * 80/60) = ceil(2.67) = 3
+#   → Scale up to 3 replicas
+# =============================================================================
+
+# HPA for Backend
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: backend-hpa
+  namespace: inventory-app
+  labels:
+    app: moeware-backend
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: backend           # Which Deployment to scale
+
+  minReplicas: 2            # Never scale below this (HA requires ≥2)
+  maxReplicas: 10           # Never scale above this (cost protection)
+
+  metrics:
+    # Scale when average CPU across pods exceeds 70%
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+
+    # Scale when average memory exceeds 80%
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+
+  # Scaling behavior — prevent flapping (scaling up/down too rapidly)
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60    # Wait 60s before scaling up again
+      policies:
+        - type: Pods
+          value: 2                       # Add at most 2 pods per scaling event
+          periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300   # Wait 5 min before scaling down
+      policies:
+        - type: Pods
+          value: 1                       # Remove at most 1 pod per event (conservative)
+          periodSeconds: 60
+
+---
+
+# HPA for Frontend
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: frontend-hpa
+  namespace: inventory-app
+  labels:
+    app: moeware-frontend
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: frontend
+  minReplicas: 2
+  maxReplicas: 6             # Frontend is cheaper to run; lower max
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 180
+
+---
+
+# =============================================================================
+# ResourceQuota — Limits total resource consumption per namespace
+# =============================================================================
+# Without quotas, a single namespace could consume all cluster resources.
+# Quotas protect other namespaces and prevent runaway costs.
+# =============================================================================
+
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: inventory-app-quota
+  namespace: inventory-app
+spec:
+  hard:
+    # Maximum pods in this namespace
+    pods: "50"
+
+    # Total CPU across all pods
+    requests.cpu: "8"
+    limits.cpu: "16"
+
+    # Total memory across all pods
+    requests.memory: "8Gi"
+    limits.memory: "16Gi"
+
+    # PersistentVolumeClaims
+    persistentvolumeclaims: "10"
+    requests.storage: "100Gi"
+
+    # Services
+    services: "20"
+    services.loadbalancers: "2"
+
+---
+
+# =============================================================================
+# LimitRange — Sets default resource limits per container
+# =============================================================================
+# If a developer forgets to specify resources in their Deployment,
+# LimitRange applies these defaults automatically.
+# This prevents "no resources set" anti-pattern.
+# =============================================================================
+
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: inventory-app-limits
+  namespace: inventory-app
+spec:
+  limits:
+    - type: Container
+      default:            # Applied if limits not specified
+        cpu: "500m"
+        memory: "512Mi"
+      defaultRequest:     # Applied if requests not specified
+        cpu: "100m"
+        memory: "128Mi"
+      max:                # Hard ceiling per container
+        cpu: "2"
+        memory: "4Gi"
+      min:                # Must request at least this much
+        cpu: "50m"
+        memory: "64Mi"

@@ -1,0 +1,210 @@
+# =============================================================================
+# PostgreSQL — StatefulSet + PersistentVolumeClaim + Service
+# =============================================================================
+# WHY StatefulSet instead of Deployment?
+#
+# Deployment pods are interchangeable — they can be killed and replaced
+# anywhere. This works for stateless apps.
+#
+# Databases have STATE. A StatefulSet gives each pod:
+#   1. A stable, persistent hostname (postgres-0, postgres-1)
+#   2. Its own dedicated PersistentVolume that survives pod restarts
+#   3. Ordered startup/shutdown (pod-0 starts before pod-1)
+#
+# For production, consider AWS RDS instead — it handles backups,
+# failover, and patching automatically. Running your own DB in K8s
+# is excellent for learning but operationally complex for production.
+# =============================================================================
+
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: inventory-app
+  labels:
+    app: postgres
+    component: database
+spec:
+  serviceName: postgres-headless   # Links to the headless Service below
+  replicas: 1                       # Single node for now; HA needs Patroni/pg-operator
+  selector:
+    matchLabels:
+      app: postgres
+
+  template:
+    metadata:
+      labels:
+        app: postgres
+        component: database
+    spec:
+      securityContext:
+        fsGroup: 999              # postgres group can write to mounted volumes
+
+      containers:
+        - name: postgres
+          image: postgres:15-alpine
+          imagePullPolicy: IfNotPresent   # Don't re-pull if already on node
+          ports:
+            - containerPort: 5432
+              name: postgres
+              protocol: TCP
+
+          # PostgreSQL reads these env vars on first startup to initialize the DB
+          envFrom:
+            - secretRef:
+                name: postgres-secrets
+
+          env:
+            # Data directory — where PostgreSQL stores its files
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata    # Subdirectory inside mount
+
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "2Gi"
+
+          # Mount the persistent volume at the data directory
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+
+            # Mount init scripts — executed ONCE on first database creation
+            - name: postgres-init
+              mountPath: /docker-entrypoint-initdb.d
+
+          # PostgreSQL has a built-in health check command
+          livenessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - $(POSTGRES_USER)
+                - -d
+                - $(POSTGRES_DB)
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 5
+
+          readinessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - $(POSTGRES_USER)
+                - -d
+                - $(POSTGRES_DB)
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+      volumes:
+        - name: postgres-init
+          configMap:
+            name: postgres-init-scripts  # See below
+
+      # Do NOT include postgres-data here — use volumeClaimTemplates instead.
+      # volumeClaimTemplates creates a dedicated PVC for each pod replica.
+
+  # =============================================================================
+  # VolumeClaimTemplates — creates a PVC per pod
+  # =============================================================================
+  # This is what makes StatefulSet different from Deployment.
+  # postgres-0 gets its own "postgres-data-postgres-0" PVC.
+  # If you scale to 2 replicas, postgres-1 gets "postgres-data-postgres-1".
+  # These PVCs persist even if the pod is deleted — data survives restarts.
+  # =============================================================================
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-data
+        labels:
+          app: postgres
+      spec:
+        accessModes:
+          - ReadWriteOnce   # One node can read/write at a time (suitable for single DB)
+        # storageClassName: gp2   # AWS EBS; uncomment for EKS. Leave blank for local.
+        resources:
+          requests:
+            storage: 20Gi
+
+---
+
+# =============================================================================
+# Postgres Init ConfigMap
+# =============================================================================
+# SQL scripts placed here run automatically when the database is first created.
+# Flyway handles schema migrations from the app — this just creates the user/db.
+# =============================================================================
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init-scripts
+  namespace: inventory-app
+data:
+  01-init.sql: |
+    -- Create the application database if it doesn't exist
+    -- (POSTGRES_DB env var creates it automatically, but this is for extensions)
+    CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+    CREATE EXTENSION IF NOT EXISTS "pg_trgm";  -- For full-text search (GIN indexes)
+
+    -- Log that initialization ran
+    DO $$ BEGIN
+      RAISE NOTICE 'Database initialization complete.';
+    END $$;
+
+---
+
+# =============================================================================
+# Postgres Services
+# =============================================================================
+# We need TWO Services for a StatefulSet:
+#
+# 1. Headless Service (ClusterIP: None) — required by StatefulSet for stable
+#    DNS names. Creates DNS entries like postgres-0.postgres-headless
+#
+# 2. Regular ClusterIP Service — what the backend app actually connects to.
+#    Points to the primary pod. Simple and stable.
+# =============================================================================
+
+# Headless Service (required by StatefulSet for DNS)
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-headless
+  namespace: inventory-app
+  labels:
+    app: postgres
+spec:
+  clusterIP: None      # This makes it headless — returns pod IPs directly, no load balancing
+  selector:
+    app: postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+
+---
+
+# Regular Service for application connections
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-service
+  namespace: inventory-app
+  labels:
+    app: postgres
+spec:
+  type: ClusterIP
+  selector:
+    app: postgres
+  ports:
+    - name: postgres
+      protocol: TCP
+      port: 5432
+      targetPort: 5432
