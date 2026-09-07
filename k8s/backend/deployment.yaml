@@ -1,0 +1,193 @@
+# =============================================================================
+# Backend — Deployment + Service
+# =============================================================================
+# A Deployment manages the lifecycle of your backend pods.
+# The Service gives them a stable internal DNS name: "backend-service"
+# Any other pod in the namespace can reach the backend at:
+#   http://backend-service:8080
+# =============================================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: inventory-app
+  labels:
+    app: moeware-backend
+    version: "1.0.0"
+  annotations:
+    # These annotations help track deployments in your CI/CD pipeline
+    kubernetes.io/change-cause: "Initial deployment"
+spec:
+  # How many identical pod replicas to run
+  replicas: 2
+
+  # Rolling update strategy — ensures zero downtime deployments
+  # maxSurge: can temporarily have 1 extra pod during update
+  # maxUnavailable: never let more than 0 pods be down during update
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+
+  # Selector tells the Deployment which pods it owns
+  # Must match the labels in the pod template below
+  selector:
+    matchLabels:
+      app: moeware-backend
+
+  template:
+    metadata:
+      labels:
+        app: moeware-backend
+        version: "1.0.0"
+      annotations:
+        # Prometheus will scrape metrics from this pod
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/actuator/prometheus"
+        prometheus.io/port: "8080"
+    spec:
+      # Use the registry credentials Secret
+      imagePullSecrets:
+        - name: regcred
+
+      # Spread pods across different nodes for high availability
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - moeware-backend
+                topologyKey: kubernetes.io/hostname
+
+      # Security: don't run as root
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+
+      containers:
+        - name: backend
+          image: yourdockerhub/inventory-backend:latest
+          # Always pull in production to get security patches
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+              name: http
+              protocol: TCP
+
+          # ---------------------------------------------------------------
+          # Environment variables from ConfigMap and Secrets
+          # envFrom injects ALL keys from a ConfigMap/Secret as env vars
+          # ---------------------------------------------------------------
+          envFrom:
+            - configMapRef:
+                name: backend-config
+            - secretRef:
+                name: backend-secrets
+
+          # Additional computed env vars
+          env:
+            # Pod's own IP — useful for logging and distributed tracing
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+
+          # ---------------------------------------------------------------
+          # Resource limits — ALWAYS set these. Without them, a runaway
+          # pod can consume all node resources and take down other pods.
+          #
+          # requests: what K8s reserves on the node (used for scheduling)
+          # limits: hard cap — pod is killed/throttled if it exceeds this
+          # ---------------------------------------------------------------
+          resources:
+            requests:
+              cpu: "250m"       # 250 millicores = 0.25 CPU core
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"      # 1 full CPU core
+              memory: "1Gi"
+
+          # ---------------------------------------------------------------
+          # Health Checks
+          #
+          # livenessProbe: Is the app alive? If this fails K8s RESTARTS the pod.
+          # readinessProbe: Is the app ready for traffic? If this fails K8s
+          #   removes the pod from Service endpoints (stops sending traffic).
+          #
+          # Spring Boot Actuator provides these endpoints automatically.
+          # ---------------------------------------------------------------
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8080
+            initialDelaySeconds: 60   # Wait 60s before first check (app startup time)
+            periodSeconds: 30          # Check every 30 seconds
+            timeoutSeconds: 10
+            failureThreshold: 3        # Restart after 3 consecutive failures
+
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8080
+            initialDelaySeconds: 30   # Readiness can succeed before liveness
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          # Security context per-container
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false  # Spring Boot writes temp files
+            capabilities:
+              drop:
+                - ALL
+
+      # Graceful shutdown — give the app 30s to finish in-flight requests
+      terminationGracePeriodSeconds: 30
+
+---
+
+# =============================================================================
+# Backend Service — stable internal network endpoint
+# =============================================================================
+# ClusterIP means only reachable from inside the cluster.
+# The Ingress (below) routes external traffic to this Service.
+# DNS: backend-service.inventory-app.svc.cluster.local
+# Short form: backend-service (works within same namespace)
+# =============================================================================
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service
+  namespace: inventory-app
+  labels:
+    app: moeware-backend
+  annotations:
+    # Prometheus ServiceMonitor will use this label to discover the service
+    prometheus.io/scrape: "true"
+spec:
+  type: ClusterIP
+  selector:
+    app: moeware-backend    # Routes to pods with this label
+  ports:
+    - name: http
+      protocol: TCP
+      port: 8080            # Port the Service listens on
+      targetPort: 8080      # Port on the pod to forward to

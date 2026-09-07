@@ -1,0 +1,47 @@
+# =============================================================================
+# Chart.yaml — Helm chart metadata
+# =============================================================================
+# Helm is the package manager for Kubernetes.
+# Instead of applying 10 separate YAML files, you run:
+#   helm install moeware ./inventory-chart -f values-prod.yaml
+#
+# Helm adds:
+#   1. Templating — use variables instead of hardcoded values
+#   2. Versioning — upgrade/rollback as a single unit
+#   3. Dependency management — include other charts (e.g., bitnami/postgresql)
+#   4. Lifecycle hooks — run migrations before app starts
+# =============================================================================
+
+apiVersion: v2
+name: inventory-chart
+description: MoeWare Inventory Management System — Helm Chart
+
+# 'application' for deploying apps, 'library' for reusable templates
+type: application
+
+# Chart version — bump this when you change the chart itself
+version: 1.0.0
+
+# Application version — what version of the app this chart deploys
+appVersion: "1.0.0"
+
+keywords:
+  - inventory
+  - management
+  - moeware
+
+home: https://moeware.com
+sources:
+  - https://github.com/MohamedDev99/inventory-management-system
+
+maintainers:
+  - name: MoeWare DevOps Team
+    email: devops@moeware.com
+
+# Dependencies — other charts this chart depends on
+# Uncomment to use Bitnami's PostgreSQL chart instead of our StatefulSet
+# dependencies:
+#   - name: postgresql
+#     version: "13.x.x"
+#     repository: https://charts.bitnami.com/bitnami
+#     condition: postgresql.enabled

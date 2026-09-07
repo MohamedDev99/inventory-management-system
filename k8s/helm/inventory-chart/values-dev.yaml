@@ -1,0 +1,68 @@
+# =============================================================================
+# values-dev.yaml — Development environment overrides
+# =============================================================================
+# Only specify values that DIFFER from values.yaml defaults.
+# Helm merges this on top of the defaults.
+#
+# Usage:
+#   helm install moeware ./inventory-chart -f values-dev.yaml -n inventory-dev
+# =============================================================================
+
+global:
+  namespace: inventory-dev
+  environment: development
+  domain: dev.moeware.com
+
+backend:
+  replicaCount: 1 # Save resources in dev
+  image:
+    pullPolicy: IfNotPresent # Don't always pull in dev (faster iteration)
+  config:
+    springProfilesActive: "dev"
+    logLevel: "DEBUG" # Verbose logging in dev
+    logLevelSql: "DEBUG" # See all SQL queries
+  resources:
+    requests:
+      cpu: "100m" # Lower resource requests for dev cluster
+      memory: "256Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+  autoscaling:
+    enabled: false # No autoscaling in dev
+  probes:
+    liveness:
+      initialDelaySeconds: 90 # Give more time in dev (slower startup)
+
+frontend:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+
+postgresql:
+  persistence:
+    size: "5Gi" # Smaller storage for dev
+
+ingress:
+  host: dev.moeware.com
+  apiHost: api.dev.moeware.com
+  tls:
+    certManagerIssuer: "letsencrypt-staging" # Use staging cert in dev (no rate limits)
+
+cronjobs:
+  stockValuation:
+    enabled: false # Don't run scheduled jobs in dev by default
+  databaseBackup:
+    enabled: false
+  monthlyReconciliation:
+    enabled: false
+  lowStockCheck:
+    schedule: "*/5 * * * *" # Run every 5 min in dev for testing
+    enabled: true
+
+resourceQuota:
+  pods: "20"
+  requestsCpu: "2"
+  limitsCpu: "4"
+  requestsMemory: "2Gi"
+  limitsMemory: "4Gi"

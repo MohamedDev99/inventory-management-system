@@ -1,0 +1,172 @@
+# =============================================================================
+# Ingress — HTTP routing into the cluster
+# =============================================================================
+# Without Ingress, you'd need a separate LoadBalancer Service per app
+# (each creates a cloud load balancer = expensive).
+#
+# With Ingress:
+#   ONE LoadBalancer Service for the Nginx Ingress Controller
+#   The Ingress resource defines routing RULES
+#
+# Traffic flow:
+#   Internet → Cloud LB → Nginx Ingress Controller Pod
+#     → /api/*  → backend-service:8080
+#     → /*      → frontend-service:80
+#
+# Install the Nginx Ingress Controller first:
+#   kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.9.4/deploy/static/provider/cloud/deploy.yaml
+#   OR with Helm:
+#   helm upgrade --install ingress-nginx ingress-nginx \
+#     --repo https://kubernetes.github.io/ingress-nginx \
+#     --namespace ingress-nginx --create-namespace
+# =============================================================================
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: inventory-ingress
+  namespace: inventory-app
+  labels:
+    app: moeware
+  annotations:
+    # Tell K8s which Ingress controller to use
+    kubernetes.io/ingress.class: "nginx"
+
+    # Redirect all HTTP to HTTPS
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+
+    # Cert-manager will automatically provision and renew SSL certificates
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+
+    # Rate limiting — 100 requests per minute per IP
+    nginx.ingress.kubernetes.io/limit-rps: "100"
+
+    # Increase proxy timeouts for long-running operations (report generation)
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "120"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
+
+    # Enable CORS (handled by backend, but Nginx can also handle preflight)
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://moeware.com"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Authorization, Content-Type"
+
+    # Increase body size for file uploads (product images, attachments)
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+
+spec:
+  # TLS — cert-manager watches for this and creates a certificate automatically
+  tls:
+    - hosts:
+        - moeware.com
+        - www.moeware.com
+        - api.moeware.com
+      secretName: moeware-tls    # cert-manager stores the cert here
+
+  rules:
+    # API subdomain routes to backend
+    - host: api.moeware.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: backend-service
+                port:
+                  number: 8080
+
+    # Main domain routes to frontend, with /api proxied to backend
+    - host: moeware.com
+      http:
+        paths:
+          # API requests on the main domain go to backend
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: backend-service
+                port:
+                  number: 8080
+
+          # Actuator endpoints (health checks) — block from public access
+          # Use NetworkPolicy instead for stricter control
+          - path: /actuator
+            pathType: Prefix
+            backend:
+              service:
+                name: backend-service
+                port:
+                  number: 8080
+
+          # Everything else goes to the frontend
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend-service
+                port:
+                  number: 80
+
+    # www redirect (handled by separate rule or cert-manager)
+    - host: www.moeware.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend-service
+                port:
+                  number: 80
+
+---
+
+# =============================================================================
+# Cert-Manager ClusterIssuer
+# =============================================================================
+# cert-manager automates SSL certificate provisioning from Let's Encrypt.
+# It watches Ingress resources for cert-manager.io/cluster-issuer annotations
+# and automatically requests, provisions, and renews certificates.
+#
+# Install cert-manager first:
+#   kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.13.0/cert-manager.yaml
+# =============================================================================
+
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+  labels:
+    app: moeware
+spec:
+  acme:
+    # Let's Encrypt production API
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: admin@moeware.com    # Receives certificate expiry warnings
+    privateKeySecretRef:
+      name: letsencrypt-prod-account-key
+    solvers:
+      - http01:
+          ingress:
+            class: nginx
+
+---
+
+# Staging issuer for testing (doesn't count against rate limits)
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-staging
+spec:
+  acme:
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+    email: admin@moeware.com
+    privateKeySecretRef:
+      name: letsencrypt-staging-account-key
+    solvers:
+      - http01:
+          ingress:
+            class: nginx
