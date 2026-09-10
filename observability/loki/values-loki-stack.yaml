@@ -1,0 +1,54 @@
+# helm repo add grafana https://grafana.github.io/helm-charts
+# helm install loki grafana/loki-stack -n monitoring -f values-loki-stack.yaml
+#
+# This chart bundles both Loki (log storage) and Promtail (log-shipping DaemonSet —
+# one Promtail pod per node, tailing every container's stdout/stderr).
+
+loki:
+  enabled: true
+  persistence:
+    enabled: true
+    size: 20Gi
+  config:
+    table_manager:
+      retention_deletes_enabled: true
+      retention_period: 168h   # 7 days — fine for dev. Bump to 720h (30d) for prod, watch disk cost.
+    limits_config:
+      # Caps a single noisy pod from ingesting unbounded log volume and drowning out everyone else.
+      ingestion_rate_mb: 8
+      ingestion_burst_size_mb: 16
+
+promtail:
+  enabled: true
+  config:
+    snippets:
+      pipelineStages:
+        - cri: {}
+        # logback-spring.xml (backend/) emits JSON — parse it here so level/traceId/application
+        # become queryable Loki labels instead of buried text.
+        - json:
+            expressions:
+              level: level
+              traceId: traceId
+              application: application
+        - labels:
+            level:
+            application:
+    scrapeConfigs: |
+      - job_name: kubernetes-pods
+        kubernetes_sd_configs:
+          - role: pod
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            target_label: app
+          - source_labels: [__meta_kubernetes_namespace]
+            target_label: namespace
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
+          - source_labels: [__meta_kubernetes_pod_container_name]
+            target_label: container
+
+grafana:
+  # Loki is already declared as a Grafana datasource in prometheus/values-prometheus.yaml
+  # (grafana.additionalDataSources), since Grafana is deployed via kube-prometheus-stack.
+  enabled: false

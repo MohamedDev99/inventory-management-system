@@ -1,0 +1,41 @@
+# Tells Prometheus how to scrape the Spring Boot backend's /actuator/prometheus endpoint.
+# Requires management.endpoints.web.exposure.include=prometheus (see backend/application-observability.yml)
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: inventory-backend
+  namespace: inventory-app
+  labels:
+    release: prometheus # must match kube-prometheus-stack's serviceMonitorSelector
+spec:
+  namespaceSelector:
+    matchNames:
+      - inventory-app
+  selector:
+    matchLabels:
+      app: inventory-backend
+  endpoints:
+    - port: http # name of the port on the backend Service, not the container
+      path: /actuator/prometheus
+      interval: 15s
+      scrapeTimeout: 10s
+---
+# Optional: if an nginx-prometheus-exporter sidecar is later added to the frontend deployment
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: inventory-frontend
+  namespace: inventory-app
+  labels:
+    release: prometheus
+spec:
+  namespaceSelector:
+    matchNames:
+      - inventory-app
+  selector:
+    matchLabels:
+      app: inventory-frontend
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 30s
