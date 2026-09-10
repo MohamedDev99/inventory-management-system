@@ -1,0 +1,90 @@
+# Helm values for kube-prometheus-stack
+# Install: helm install prometheus prometheus-community/kube-prometheus-stack \
+#            -n monitoring -f values-prometheus.yaml
+
+fullnameOverride: prometheus
+
+prometheus:
+  prometheusSpec:
+    retention: 15d
+    retentionSize: "10GB"
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: 1000m
+        memory: 2Gi
+    # Discover ServiceMonitors/PrometheusRules in ANY namespace, not just this release's,
+    # so inventory-app's servicemonitor-backend.yaml and alert-rules.yaml get picked up.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 20Gi
+
+alertmanager:
+  alertmanagerSpec:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
+  config:
+    global:
+      resolve_timeout: 5m
+    route:
+      receiver: "slack-notifications"
+      group_by: ["alertname", "namespace"]
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+      routes:
+        - matchers:
+            - severity="critical"
+          receiver: "slack-notifications"
+          repeat_interval: 1h
+    receivers:
+      - name: "slack-notifications"
+        slack_configs:
+          # Replace with a real webhook stored in a Secret (alertmanagerConfigSecret),
+          # never commit a live webhook URL to git.
+          - api_url: "<SLACK_WEBHOOK_URL>"
+            channel: "#inventory-app-alerts"
+            send_resolved: true
+            title: "{{ .CommonAnnotations.summary }}"
+            text: "{{ .CommonAnnotations.description }}"
+
+grafana:
+  adminPassword: "changeme-before-real-use" # override via --set or an external secret
+  persistence:
+    enabled: true
+    size: 5Gi
+  defaultDashboardsEnabled: true
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      searchNamespace: ALL
+  additionalDataSources:
+    - name: Loki
+      type: loki
+      url: http://loki.monitoring.svc.cluster.local:3100
+      access: proxy
+    - name: Jaeger
+      type: jaeger
+      url: http://inventory-jaeger-query.monitoring.svc.cluster.local:16686
+      access: proxy
+
+nodeExporter:
+  enabled: true
+
+kubeStateMetrics:
+  enabled: true

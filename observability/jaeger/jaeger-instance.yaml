@@ -1,0 +1,40 @@
+# Requires the Jaeger Operator installed first:
+#   kubectl apply -f https://github.com/jaegertracing/jaeger-operator/releases/download/v1.57.0/jaeger-operator.yaml -n monitoring
+#
+# This CR deploys an "AllInOne" Jaeger for dev/demo purposes — in-memory storage, traces are
+# lost on pod restart. That's an intentional simplification for this project stage; see the
+# commented production block below for what changes before this is a real deployment.
+
+apiVersion: jaegertracing.io/v1
+kind: Jaeger
+metadata:
+  name: inventory-jaeger
+  namespace: monitoring
+spec:
+  strategy: allinone
+  allInOne:
+    options:
+      log-level: info
+      memory:
+        max-traces: 100000
+  ingress:
+    enabled: false   # for now: kubectl port-forward -n monitoring svc/inventory-jaeger-query 16686:16686
+  collector:
+    otlp:
+      grpc:
+        port: 4317
+      http:
+        port: 4318   # matches management.otlp.tracing.endpoint in backend/application-observability.yml
+
+# --- Production alternative (uncomment / adapt, and delete the "allinone" block above) ---
+# spec:
+#   strategy: production
+#   storage:
+#     type: elasticsearch
+#     options:
+#       es:
+#         server-urls: http://elasticsearch:9200
+#   collector:
+#     replicas: 2
+#   query:
+#     replicas: 2
